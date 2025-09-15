@@ -1,4 +1,11 @@
 
+using BankingPaymentsAPI.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.SqlServer;
+using Microsoft.OpenApi.Models;
+using System.Text;
+using System.Security.Claims;
+
 namespace BankingPaymentsAPI
 {
     public class Program
@@ -6,6 +13,9 @@ namespace BankingPaymentsAPI
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
+            builder.Services.AddDbContext<AppDbContext>(options =>
+              options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
 
             // Add services to the container.
 

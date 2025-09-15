@@ -5,7 +5,7 @@ namespace BankingPaymentsAPI.Models
     public class SalaryPayment
     {
         public int Id { get; set; }
-        public int SalaryBatchId { get; set; }
+        public int? SalaryBatchId { get; set; }
         public SalaryBatch SalaryBatch { get; set; }
 
         public int EmployeeId { get; set; }
