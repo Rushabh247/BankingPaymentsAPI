@@ -2,10 +2,8 @@
 using BankingPaymentsAPI.Enums;
 using BankingPaymentsAPI.Models;
 using BankingPaymentsAPI.Repository;
-
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using Microsoft.AspNetCore.Http;
+using System.Text.Json;
 
 namespace BankingPaymentsAPI.Services
 {
@@ -13,11 +11,19 @@ namespace BankingPaymentsAPI.Services
     {
         private readonly ISalaryRepository _repo;
         private readonly IEmployeeRepository _employeeRepo;
+        private readonly IAuditService _audit;
+        private readonly IHttpContextAccessor _httpContext;
 
-        public SalaryService(ISalaryRepository repo, IEmployeeRepository employeeRepo)
+        public SalaryService(
+            ISalaryRepository repo,
+            IEmployeeRepository employeeRepo,
+            IAuditService audit,
+            IHttpContextAccessor httpContext)
         {
             _repo = repo;
             _employeeRepo = employeeRepo;
+            _audit = audit;
+            _httpContext = httpContext;
         }
 
         public SalaryBatchDto CreateBatch(SalaryBatchRequestDto request, int createdBy)
@@ -37,6 +43,19 @@ namespace BankingPaymentsAPI.Services
             };
 
             _repo.AddBatch(batch);
+
+            //  Log CREATE
+            _audit.Log(new CreateAuditLogDto
+            {
+                UserId = GetCurrentUserId(),
+                Action = "CREATE_BATCH",
+                EntityName = nameof(SalaryBatch),
+                EntityId = batch.Id,
+                OldValueJson = null,
+                NewValueJson = JsonSerializer.Serialize(batch),
+                IpAddress = GetClientIp()
+            });
+
             return MapToDto(batch);
         }
 
@@ -55,8 +74,24 @@ namespace BankingPaymentsAPI.Services
         {
             var b = _repo.GetBatchById(id);
             if (b == null) return null;
+
+            var oldValue = JsonSerializer.Serialize(b);
+
             b.Status = BatchStatus.Submitted;
             _repo.UpdateBatch(b);
+
+            // Log UPDATE
+            _audit.Log(new CreateAuditLogDto
+            {
+                UserId = GetCurrentUserId(),
+                Action = "SUBMIT_BATCH",
+                EntityName = nameof(SalaryBatch),
+                EntityId = b.Id,
+                OldValueJson = oldValue,
+                NewValueJson = JsonSerializer.Serialize(b),
+                IpAddress = GetClientIp()
+            });
+
             return MapToDto(b);
         }
 
@@ -64,7 +99,21 @@ namespace BankingPaymentsAPI.Services
         {
             var b = _repo.GetBatchById(id);
             if (b == null) return false;
+
             _repo.DeleteBatch(b);
+
+            //  Log DELETE
+            _audit.Log(new CreateAuditLogDto
+            {
+                UserId = GetCurrentUserId(),
+                Action = "DELETE_BATCH",
+                EntityName = nameof(SalaryBatch),
+                EntityId = b.Id,
+                OldValueJson = JsonSerializer.Serialize(b),
+                NewValueJson = null,
+                IpAddress = GetClientIp()
+            });
+
             return true;
         }
 
@@ -86,5 +135,17 @@ namespace BankingPaymentsAPI.Services
                     TxnRef = i.TxnRef
                 }).ToList() ?? new List<SalaryPaymentDto>()
             };
+
+        // Helpers
+        private int GetCurrentUserId()
+        {
+            var userIdClaim = _httpContext.HttpContext?.User?.FindFirst("userId")?.Value;
+            return int.TryParse(userIdClaim, out var id) ? id : 0;
+        }
+
+        private string GetClientIp()
+        {
+            return _httpContext.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
+        }
     }
 }
