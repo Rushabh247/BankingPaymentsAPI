@@ -80,6 +80,30 @@ namespace BankingPaymentsAPI
             builder.Services.AddScoped<IUserRepository, UserRepository>();
             builder.Services.AddScoped<IUserService, UserService>();
 
+            builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
+            builder.Services.AddScoped<ITransactionService, TransactionService>();
+
+            builder.Services.AddScoped<IBankRepository, BankRepository>();
+            builder.Services.AddScoped<IBankService, BankService>();
+
+            builder.Services.AddScoped<IClientRepository, ClientRepository>();
+            builder.Services.AddScoped<IClientService, ClientService>();
+
+            builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+            builder.Services.AddScoped<IEmployeeService, EmployeeService>();
+
+            builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
+            builder.Services.AddScoped<IPaymentService, PaymentService>();
+
+            builder.Services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
+            builder.Services.AddScoped<IBeneficiaryService, BeneficiaryService>();
+
+
+            builder.Services.AddScoped<IReportRepository, ReportRepository>();
+            builder.Services.AddScoped<IReportService, ReportService>();
+
+
+
             //builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
             //builder.Services.AddScoped<IDocumentService, DocumentService>();
 
@@ -89,7 +113,7 @@ namespace BankingPaymentsAPI
             //builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
             //builder.Services.AddScoped<IAuditService, AuditService>();
 
-            
+
             //builder.Services.AddScoped<IFileStorageService, CloudinaryFileStorageService>();
 
             var app = builder.Build();
