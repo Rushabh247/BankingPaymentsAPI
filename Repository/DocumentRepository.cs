@@ -3,6 +3,7 @@ using BankingPaymentsAPI.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Repository
 {
@@ -11,29 +12,33 @@ namespace BankingPaymentsAPI.Repository
         private readonly AppDbContext _context;
         public DocumentRepository(AppDbContext context) => _context = context;
 
-        public Document Add(Document document)
+        public async Task<Document> AddAsync(Document document)
         {
-            _context.Documents.Add(document);
-            _context.SaveChanges();
+            await _context.Documents.AddAsync(document);
+            await _context.SaveChangesAsync();
             return document;
         }
 
-        public Document? GetById(int id)
+        public async Task<Document?> GetByIdAsync(int id)
         {
-            return _context.Documents
+            return await _context.Documents
+                .AsNoTracking()
                 .Include(d => d.Client)
-                .FirstOrDefault(d => d.Id == id);
+                .FirstOrDefaultAsync(d => d.Id == id);
         }
 
-        public IEnumerable<Document> GetByClientId(int clientId)
+        public async Task<IEnumerable<Document>> GetByClientIdAsync(int clientId)
         {
-            return _context.Documents.Where(d => d.ClientId == clientId).ToList();
+            return await _context.Documents
+                .AsNoTracking()
+                .Where(d => d.ClientId == clientId)
+                .ToListAsync();
         }
 
-        public void Delete(Document document)
+        public async Task DeleteAsync(Document document)
         {
             _context.Documents.Remove(document);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
         }
     }
 }

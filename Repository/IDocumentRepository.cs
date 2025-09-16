@@ -1,13 +1,14 @@
 ﻿using BankingPaymentsAPI.Models;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Repository
 {
     public interface IDocumentRepository
     {
-        Document Add(Document document);
-        Document? GetById(int id);
-        IEnumerable<Document> GetByClientId(int clientId);
-        void Delete(Document document);
+        Task<Document> AddAsync(Document document);
+        Task<Document?> GetByIdAsync(int id);
+        Task<IEnumerable<Document>> GetByClientIdAsync(int clientId);
+        Task DeleteAsync(Document document);
     }
 }

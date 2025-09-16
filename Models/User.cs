@@ -15,11 +15,11 @@ namespace BankingPaymentsAPI.Models
         public bool IsActive { get; set; } = true;
         public DateTimeOffset LastLogin { get; set; }
 
-        // One-to-one with Client if ClientUser
+  
         public int? ClientId { get; set; }
         public Client Client { get; set; }
 
-        // One-to-one with Bank if BankUser
+        
         public int? BankId { get; set; }
         public Bank Bank { get; set; }
 

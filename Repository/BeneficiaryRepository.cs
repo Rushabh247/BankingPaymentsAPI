@@ -22,6 +22,7 @@ namespace BankingPaymentsAPI.Repository
         public Beneficiary? GetById(int id)
         {
             return _context.Beneficiaries
+                .AsNoTracking()
                 .Include(b => b.Client)
                 .FirstOrDefault(b => b.Id == id);
         }
@@ -29,6 +30,7 @@ namespace BankingPaymentsAPI.Repository
         public IEnumerable<Beneficiary> GetByClientId(int clientId)
         {
             return _context.Beneficiaries
+                .AsNoTracking()
                 .Where(b => b.ClientId == clientId)
                 .ToList();
         }
@@ -36,6 +38,7 @@ namespace BankingPaymentsAPI.Repository
         public IEnumerable<Beneficiary> GetAll()
         {
             return _context.Beneficiaries
+                .AsNoTracking()
                 .Include(b => b.Client)
                 .ToList();
         }

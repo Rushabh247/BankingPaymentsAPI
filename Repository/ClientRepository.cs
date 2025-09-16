@@ -28,12 +28,13 @@ namespace BankingPaymentsAPI.Repository
                 .Include(c => c.Beneficiaries)
                 .Include(c => c.Employees)
                 .Include(c => c.Documents)
-                .FirstOrDefault(c => c.Id == id);
+               .AsNoTracking().FirstOrDefault(c => c.Id == id);
         }
 
         public IEnumerable<Client> GetAll()
         {
             return _context.Clients
+                .AsNoTracking()
                 .Include(c => c.Bank)
                 .ToList();
         }

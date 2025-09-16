@@ -24,6 +24,7 @@ namespace BankingPaymentsAPI.Repository
         public Payment? GetById(int id)
         {
             return _context.Payments
+                .AsNoTracking()
                 .Include(p => p.Client)
                 .Include(p => p.Beneficiary)
                 .Include(p => p.Transactions)
@@ -33,6 +34,7 @@ namespace BankingPaymentsAPI.Repository
         public IEnumerable<Payment> GetAll()
         {
             return _context.Payments
+                .AsNoTracking()
                 .Include(p => p.Client)
                 .Include(p => p.Beneficiary)
                 .ToList();

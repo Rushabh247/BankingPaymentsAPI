@@ -30,6 +30,8 @@ namespace BankingPaymentsAPI.Data
         {
             base.OnModelCreating(modelBuilder);
 
+            modelBuilder.Entity<User>().HasQueryFilter(u => u.IsActive);
+
             // User: enforce unique email
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Email)

@@ -4,6 +4,10 @@ using BankingPaymentsAPI.Enums;
 using BankingPaymentsAPI.Repository;
 using BankingPaymentsAPI.Models;
 using Microsoft.AspNetCore.Http;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Services
 {
@@ -18,7 +22,7 @@ namespace BankingPaymentsAPI.Services
             _fileStorage = fileStorage;
         }
 
-      
+        // Upload new document
         public async Task<DocumentUploadResultDto> UploadDocumentAsync(int clientId, IFormFile file, string documentType, int uploadedBy)
         {
             using var stream = file.OpenReadStream();
@@ -44,7 +48,7 @@ namespace BankingPaymentsAPI.Services
                 UploadedBy = uploadedBy
             };
 
-            _repo.Add(doc);
+            await _repo.AddAsync(doc);
 
             return new DocumentUploadResultDto
             {
@@ -61,9 +65,10 @@ namespace BankingPaymentsAPI.Services
             };
         }
 
-        public DocumentDto? GetById(int id)
+        //  Get by Id
+        public async Task<DocumentDto?> GetByIdAsync(int id)
         {
-            var d = _repo.GetById(id);
+            var d = await _repo.GetByIdAsync(id);
             if (d == null) return null;
 
             return new DocumentDto
@@ -77,9 +82,12 @@ namespace BankingPaymentsAPI.Services
             };
         }
 
-        public IEnumerable<DocumentDto> GetByClient(int clientId)
+        // Get all by Client
+        public async Task<IEnumerable<DocumentDto>> GetByClientAsync(int clientId)
         {
-            return _repo.GetByClientId(clientId).Select(d => new DocumentDto
+            var docs = await _repo.GetByClientIdAsync(clientId);
+
+            return docs.Select(d => new DocumentDto
             {
                 Id = d.Id,
                 ClientId = d.ClientId,
@@ -90,16 +98,17 @@ namespace BankingPaymentsAPI.Services
             });
         }
 
-       
+      
+        //  Delete document (Cloudinary + DB)
         public async Task<bool> DeleteAsync(int id)
         {
-            var d = _repo.GetById(id);
+            var d = await _repo.GetByIdAsync(id);
             if (d == null) return false;
 
             // Delete from Cloudinary
             await _fileStorage.DeleteFileAsync(d.CloudinaryPublicId);
 
-            _repo.Delete(d);
+            await _repo.DeleteAsync(d);
             return true;
         }
     }

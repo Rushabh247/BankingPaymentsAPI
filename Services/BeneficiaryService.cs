@@ -13,7 +13,7 @@ namespace BankingPaymentsAPI.Services
         private readonly IBeneficiaryRepository _repo;
         public BeneficiaryService(IBeneficiaryRepository repo) => _repo = repo;
 
-        // NOTE: replace Encrypt/Mask with real crypto using KeyVault in prod
+       
         private string Encrypt(string plain) => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(plain));
         private string Mask(string encrypted)
         {
