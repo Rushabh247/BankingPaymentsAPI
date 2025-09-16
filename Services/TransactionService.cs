@@ -1,16 +1,23 @@
 ﻿using BankingPaymentsAPI.DTOs;
 using BankingPaymentsAPI.Repository;
 using BankingPaymentsAPI.Models;
-using System;
-using System.Linq;
-using System.Collections.Generic;
+using Microsoft.AspNetCore.Http;
+using System.Text.Json;
 
 namespace BankingPaymentsAPI.Services
 {
     public class TransactionService : ITransactionService
     {
         private readonly ITransactionRepository _repo;
-        public TransactionService(ITransactionRepository repo) => _repo = repo;
+        private readonly IAuditService _audit;
+        private readonly IHttpContextAccessor _httpContext;
+
+        public TransactionService(ITransactionRepository repo, IAuditService audit, IHttpContextAccessor httpContext)
+        {
+            _repo = repo;
+            _audit = audit;
+            _httpContext = httpContext;
+        }
 
         public TransactionDto RecordTransaction(TransactionDto dto)
         {
@@ -26,6 +33,19 @@ namespace BankingPaymentsAPI.Services
             };
 
             _repo.Add(txn);
+
+            //  Log CREATE
+            _audit.Log(new CreateAuditLogDto
+            {
+                UserId = GetCurrentUserId(),
+                Action = "CREATE_TRANSACTION",
+                EntityName = nameof(Transaction),
+                EntityId = txn.Id,
+                OldValueJson = null,
+                NewValueJson = JsonSerializer.Serialize(txn),
+                IpAddress = GetClientIp()
+            });
+
             dto.Id = txn.Id;
             dto.TransactionDate = txn.TransactionDate;
             return dto;
@@ -34,8 +54,7 @@ namespace BankingPaymentsAPI.Services
         public TransactionDto? GetById(int id)
         {
             var t = _repo.GetById(id);
-            if (t == null) return null;
-            return MapToDto(t);
+            return t == null ? null : MapToDto(t);
         }
 
         public IEnumerable<TransactionDto> GetByPaymentId(int paymentId)
@@ -60,5 +79,17 @@ namespace BankingPaymentsAPI.Services
                 Status = t.Status,
                 ExternalTxnRef = t.ExternalTxnRef
             };
+
+        // Helpers
+        private int GetCurrentUserId()
+        {
+            var userIdClaim = _httpContext.HttpContext?.User?.FindFirst("userId")?.Value;
+            return int.TryParse(userIdClaim, out var id) ? id : 0;
+        }
+
+        private string GetClientIp()
+        {
+            return _httpContext.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
+        }
     }
 }

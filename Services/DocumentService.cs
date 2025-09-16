@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.Json;
 
 namespace BankingPaymentsAPI.Services
 {
@@ -15,11 +16,19 @@ namespace BankingPaymentsAPI.Services
     {
         private readonly IDocumentRepository _repo;
         private readonly IFileStorageService _fileStorage;
+        private readonly IAuditService _audit;
+        private readonly IHttpContextAccessor _httpContext;
 
-        public DocumentService(IDocumentRepository repo, IFileStorageService fileStorage)
+        public DocumentService(
+            IDocumentRepository repo,
+            IFileStorageService fileStorage,
+            IAuditService audit,
+            IHttpContextAccessor httpContext)
         {
             _repo = repo;
             _fileStorage = fileStorage;
+            _audit = audit;
+            _httpContext = httpContext;
         }
 
         // Upload new document
@@ -27,7 +36,7 @@ namespace BankingPaymentsAPI.Services
         {
             using var stream = file.OpenReadStream();
 
-            // Upload file to Cloudinary (async)
+            // Upload file to Cloudinary 
             var storageResult = await _fileStorage.UploadFileAsync(
                 stream,
                 file.FileName,
@@ -50,6 +59,18 @@ namespace BankingPaymentsAPI.Services
 
             await _repo.AddAsync(doc);
 
+            // Log CREATE
+            _audit.Log(new CreateAuditLogDto
+            {
+                UserId = GetCurrentUserId(),
+                Action = "CREATE",
+                EntityName = nameof(Document),
+                EntityId = doc.Id,
+                OldValueJson = null,
+                NewValueJson = JsonSerializer.Serialize(doc),
+                IpAddress = GetClientIp()
+            });
+
             return new DocumentUploadResultDto
             {
                 Id = doc.Id,
@@ -65,7 +86,7 @@ namespace BankingPaymentsAPI.Services
             };
         }
 
-        //  Get by Id
+        // Get by Id
         public async Task<DocumentDto?> GetByIdAsync(int id)
         {
             var d = await _repo.GetByIdAsync(id);
@@ -98,18 +119,44 @@ namespace BankingPaymentsAPI.Services
             });
         }
 
-      
-        //  Delete document (Cloudinary + DB)
+        // Delete document (Cloudinary + DB)
         public async Task<bool> DeleteAsync(int id)
         {
             var d = await _repo.GetByIdAsync(id);
             if (d == null) return false;
 
+            var oldValue = JsonSerializer.Serialize(d);
+
             // Delete from Cloudinary
             await _fileStorage.DeleteFileAsync(d.CloudinaryPublicId);
 
             await _repo.DeleteAsync(d);
+
+            // Log DELETE
+            _audit.Log(new CreateAuditLogDto
+            {
+                UserId = GetCurrentUserId(),
+                Action = "DELETE",
+                EntityName = nameof(Document),
+                EntityId = d.Id,
+                OldValueJson = oldValue,
+                NewValueJson = null,
+                IpAddress = GetClientIp()
+            });
+
             return true;
+        }
+
+        //  Helpers
+        private int GetCurrentUserId()
+        {
+            var userIdClaim = _httpContext.HttpContext?.User?.FindFirst("userId")?.Value;
+            return int.TryParse(userIdClaim, out var id) ? id : 0;
+        }
+
+        private string GetClientIp()
+        {
+            return _httpContext.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
         }
     }
 }
