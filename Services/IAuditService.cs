@@ -8,5 +8,7 @@ namespace BankingPaymentsAPI.Services
         AuditLogDto Log(CreateAuditLogDto dto);
         IEnumerable<AuditLogDto> GetByEntity(string entityName, int entityId);
         IEnumerable<AuditLogDto> GetByUser(int userId);
+
+        IEnumerable<AuditLogDto> GetAll(); // added
     }
 }

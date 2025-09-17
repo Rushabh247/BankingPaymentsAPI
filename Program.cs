@@ -102,6 +102,9 @@ namespace BankingPaymentsAPI
             builder.Services.AddScoped<IReportRepository, ReportRepository>();
             builder.Services.AddScoped<IReportService, ReportService>();
 
+            builder.Services.AddScoped<ISalaryRepository, SalaryRepository>();
+            builder.Services.AddScoped<ISalaryService, SalaryService>();
+
 
 
             //builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
@@ -110,11 +113,13 @@ namespace BankingPaymentsAPI
             //builder.Services.AddScoped<IAuthService, AuthService>();
             //builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 
-            //builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
-            //builder.Services.AddScoped<IAuditService, AuditService>();
+            builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+            builder.Services.AddScoped<IAuditService, AuditService>();
 
 
             //builder.Services.AddScoped<IFileStorageService, CloudinaryFileStorageService>();
+
+            builder.Services.AddHttpContextAccessor();
 
             var app = builder.Build();
 

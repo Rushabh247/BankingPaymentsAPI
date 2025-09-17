@@ -58,6 +58,12 @@ namespace BankingPaymentsAPI.Services
             return _repo.GetByUser(userId).Select(MapToDto);
         }
 
+        // new method
+        public IEnumerable<AuditLogDto> GetAll()
+        {
+            return _repo.GetAll().Select(MapToDto);
+        }
+
         private AuditLogDto MapToDto(AuditLog a) =>
             new AuditLogDto
             {
