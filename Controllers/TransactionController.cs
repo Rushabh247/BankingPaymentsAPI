@@ -19,7 +19,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Record a new transaction
         [HttpPost]
-       // [Authorize(Roles = "Admin,BankUser")]
+       [Authorize(Roles = "Admin,BankUser")]
         public IActionResult RecordTransaction([FromBody] TransactionDto dto)
         {
             var recorded = _service.RecordTransaction(dto);
@@ -28,7 +28,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Get transaction by ID
         [HttpGet("{id}")]
-       // [Authorize(Roles = "Admin,BankUser")]
+       [Authorize(Roles = "Admin,BankUser")]
         public IActionResult GetById(int id)
         {
             var txn = _service.GetById(id);
@@ -37,7 +37,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Get transactions by PaymentId
         [HttpGet("by-payment/{paymentId}")]
-       // [Authorize(Roles = "Admin,BankUser")]
+        [Authorize(Roles = "Admin,BankUser")]
         public ActionResult<IEnumerable<TransactionDto>> GetByPaymentId(int paymentId)
         {
             var txns = _service.GetByPaymentId(paymentId);
@@ -46,7 +46,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Get all transactions
         [HttpGet]
-      //  [Authorize(Roles = "Admin")]
+       [Authorize(Roles = "Admin")]
         public ActionResult<IEnumerable<TransactionDto>> GetAll()
         {
             var txns = _service.GetAll();

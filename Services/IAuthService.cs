@@ -1,11 +1,8 @@
 ﻿using BankingPaymentsAPI.DTOs;
 
-namespace BankingPaymentsAPI.Services
+public interface IAuthService
 {
-    public interface IAuthService
-    {
-        AuthResponseDto Login(LoginRequestDto dto);
-        AuthResponseDto RefreshToken(RefreshRequestDto dto);
-        void Logout(LogoutRequestDto dto);
-    }
+    Task<AuthResponseDto> Login(LoginRequestDto dto);
+    Task<AuthResponseDto> RefreshToken(RefreshRequestDto dto);
+    Task Logout(LogoutRequestDto dto);
 }

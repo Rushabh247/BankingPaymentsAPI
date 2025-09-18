@@ -1,14 +1,15 @@
 ﻿using BankingPaymentsAPI.Models;
-
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Repository
 {
     public interface IRefreshTokenRepository
     {
-        RefreshToken Add(RefreshToken token);
-        RefreshToken? GetByToken(string token);
-        IEnumerable<RefreshToken> GetByUserId(int userId);
-        void Update(RefreshToken token);
-        void Delete(RefreshToken token);
+        Task<RefreshToken> AddAsync(RefreshToken token);
+        Task<RefreshToken?> GetByTokenAsync(string token);
+        Task<List<RefreshToken>> GetByUserIdAsync(int userId);
+        Task UpdateAsync(RefreshToken token);
+        Task DeleteAsync(RefreshToken token);
     }
 }

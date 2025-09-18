@@ -12,12 +12,14 @@ namespace BankingPaymentsAPI.Repository
         private readonly AppDbContext _context;
         public AuditLogRepository(AppDbContext context) => _context = context;
 
+
         public AuditLog Add(AuditLog log)
         {
             _context.AuditLogs.Add(log);
             _context.SaveChanges();
             return log;
         }
+        
 
         public IEnumerable<AuditLog> GetByEntity(string entityName, int entityId)
         {

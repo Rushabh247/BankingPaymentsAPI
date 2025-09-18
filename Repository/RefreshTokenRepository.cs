@@ -3,6 +3,7 @@ using BankingPaymentsAPI.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Repository
 {
@@ -11,31 +12,33 @@ namespace BankingPaymentsAPI.Repository
         private readonly AppDbContext _context;
         public RefreshTokenRepository(AppDbContext context) => _context = context;
 
-        public RefreshToken Add(RefreshToken token)
+        public async Task<RefreshToken> AddAsync(RefreshToken token)
         {
             _context.RefreshTokens.Add(token);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
             return token;
         }
 
-        public RefreshToken? GetByToken(string token) =>
+        public Task<RefreshToken?> GetByTokenAsync(string token) =>
             _context.RefreshTokens
-            .AsNoTracking()
-            .FirstOrDefault(t => t.Token == token);
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Token == token);
 
-        public IEnumerable<RefreshToken> GetByUserId(int userId) =>
-            _context.RefreshTokens.Where(t => t.UserId == userId).ToList();
+        public Task<List<RefreshToken>> GetByUserIdAsync(int userId) =>
+            _context.RefreshTokens
+                .Where(t => t.UserId == userId)
+                .ToListAsync();
 
-        public void Update(RefreshToken token)
+        public async Task UpdateAsync(RefreshToken token)
         {
             _context.RefreshTokens.Update(token);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
         }
 
-        public void Delete(RefreshToken token)
+        public async Task DeleteAsync(RefreshToken token)
         {
             _context.RefreshTokens.Remove(token);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
         }
     }
 }

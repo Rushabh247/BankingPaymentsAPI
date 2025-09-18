@@ -17,7 +17,8 @@ namespace BankingPaymentsAPI
         {
             var builder = WebApplication.CreateBuilder(args);
 
-           
+            builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
+
             builder.Services.AddDbContext<AppDbContext>(options =>
                 options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -110,8 +111,8 @@ namespace BankingPaymentsAPI
             //builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
             //builder.Services.AddScoped<IDocumentService, DocumentService>();
 
-            //builder.Services.AddScoped<IAuthService, AuthService>();
-            //builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+            builder.Services.AddScoped<IAuthService, AuthService>();
+            builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 
             builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
             builder.Services.AddScoped<IAuditService, AuditService>();
