@@ -22,7 +22,6 @@ namespace BankingPaymentsAPI.Repository
         public async Task<Document?> GetByIdAsync(int id)
         {
             return await _context.Documents
-                .AsNoTracking()
                 .Include(d => d.Client)
                 .FirstOrDefaultAsync(d => d.Id == id);
         }
@@ -30,7 +29,6 @@ namespace BankingPaymentsAPI.Repository
         public async Task<IEnumerable<Document>> GetByClientIdAsync(int clientId)
         {
             return await _context.Documents
-                .AsNoTracking()
                 .Where(d => d.ClientId == clientId)
                 .ToListAsync();
         }
@@ -38,6 +36,13 @@ namespace BankingPaymentsAPI.Repository
         public async Task DeleteAsync(Document document)
         {
             _context.Documents.Remove(document);
+            await _context.SaveChangesAsync();
+        }
+
+       
+        public async Task UpdateAsync(Document document)
+        {
+            _context.Documents.Update(document);
             await _context.SaveChangesAsync();
         }
     }

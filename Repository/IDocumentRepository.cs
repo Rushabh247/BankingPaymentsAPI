@@ -10,5 +10,6 @@ namespace BankingPaymentsAPI.Repository
         Task<Document?> GetByIdAsync(int id);
         Task<IEnumerable<Document>> GetByClientIdAsync(int clientId);
         Task DeleteAsync(Document document);
+        Task UpdateAsync(Document document);
     }
 }

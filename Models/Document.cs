@@ -1,4 +1,5 @@
-﻿using System.Xml.Linq;
+﻿using System.Text.Json.Serialization;
+using System.Xml.Linq;
 using BankingPaymentsAPI.Enums;
 
 namespace BankingPaymentsAPI.Models
@@ -8,6 +9,7 @@ namespace BankingPaymentsAPI.Models
         public int Id { get; set; }
 
         public int ClientId { get; set; }
+        [JsonIgnore]
         public Client Client { get; set; }
 
         public string FileName { get; set; }
@@ -16,6 +18,8 @@ namespace BankingPaymentsAPI.Models
 
         public string CloudinaryPublicId { get; set; }
         public string Url { get; set; }
+
+        public DocumentStatus Status { get; set; } = DocumentStatus.Pending;
 
         public DocumentType Type { get; set; }
         public DateTimeOffset UploadedAt { get; set; }

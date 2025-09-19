@@ -1,4 +1,5 @@
-﻿using System.Transactions;
+﻿using System.Text.Json.Serialization;
+using System.Transactions;
 using BankingPaymentsAPI.Enums;
 
 namespace BankingPaymentsAPI.Models
@@ -10,6 +11,7 @@ namespace BankingPaymentsAPI.Models
         public Client Client { get; set; }
 
         public int? BeneficiaryId { get; set; }
+        [JsonIgnore]
         public Beneficiary Beneficiary { get; set; }
 
         public decimal Amount { get; set; }
@@ -19,8 +21,8 @@ namespace BankingPaymentsAPI.Models
         public int CreatedBy { get; set; }
         public int? ApprovedBy { get; set; }
         public DateTimeOffset? ApprovedAt { get; set; }
-        public string ApprovalRemarks { get; set; }
-        public string BankTransactionRef { get; set; }
+        public string? ApprovalRemarks { get; set; }
+        public string? BankTransactionRef { get; set; }
 
         public ICollection<Transaction> Transactions { get; set; }
     }

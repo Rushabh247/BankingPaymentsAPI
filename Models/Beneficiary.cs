@@ -1,9 +1,12 @@
-﻿namespace BankingPaymentsAPI.Models
+﻿using System.Text.Json.Serialization;
+
+namespace BankingPaymentsAPI.Models
 {
     public class Beneficiary
     {
         public int Id { get; set; }
         public int ClientId { get; set; }
+        [JsonIgnore]
         public Client Client { get; set; }
 
         public string Name { get; set; }

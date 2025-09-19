@@ -1,11 +1,14 @@
 ﻿
 using BankingPaymentsAPI.Enums;
+using System.Text.Json.Serialization;
 namespace BankingPaymentsAPI.Models
 {
     public class SalaryPayment
     {
         public int Id { get; set; }
         public int? SalaryBatchId { get; set; }
+
+        [JsonIgnore]
         public SalaryBatch SalaryBatch { get; set; }
 
         public int EmployeeId { get; set; }
@@ -13,6 +16,8 @@ namespace BankingPaymentsAPI.Models
 
         public decimal Amount { get; set; }
         public PaymentStatus Status { get; set; }
-        public string TxnRef { get; set; }
+        public string? TxnRef { get; set; }
+
+        public string? FailureReason { get; set; }
     }
 }

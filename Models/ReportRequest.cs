@@ -12,7 +12,7 @@ namespace BankingPaymentsAPI.Models
         public string ParametersJson { get; set; }
 
         public ReportStatus Status { get; set; }
-        public string ResultUrl { get; set; }
+        public string? ResultUrl { get; set; }
         public DateTimeOffset RequestedAt { get; set; }
     }
 }

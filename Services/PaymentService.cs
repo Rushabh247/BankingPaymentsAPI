@@ -2,7 +2,9 @@
 using BankingPaymentsAPI.Enums;
 using BankingPaymentsAPI.Models;
 using BankingPaymentsAPI.Repository;
+using BankingPaymentsAPI.Services.Notification;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 
 namespace BankingPaymentsAPI.Services
@@ -12,15 +14,21 @@ namespace BankingPaymentsAPI.Services
         private readonly IPaymentRepository _paymentRepo;
         private readonly IAuditService _audit;
         private readonly IHttpContextAccessor _httpContext;
+        private readonly IEmailNotificationService _email;
+        private readonly IConfiguration _config;
 
         public PaymentService(
             IPaymentRepository paymentRepo,
             IAuditService audit,
-            IHttpContextAccessor httpContext)
+            IHttpContextAccessor httpContext,
+            IEmailNotificationService email,
+            IConfiguration config)
         {
             _paymentRepo = paymentRepo;
             _audit = audit;
             _httpContext = httpContext;
+            _email = email;
+            _config = config;
         }
 
         public PaymentDto CreatePayment(PaymentRequestDto request, int createdByUserId)
@@ -35,9 +43,17 @@ namespace BankingPaymentsAPI.Services
                 CreatedBy = createdByUserId
             };
 
-            _paymentRepo.Add(payment);
+           
+            payment = _paymentRepo.Add(payment);
 
-            //  Log CREATE
+            var fromEmail = _config["Smtp:From"];
+
+            _email.SendEmailAsync(
+                payment.Client?.ContactEmail ?? fromEmail,
+                "Payment Created",
+                $"Your payment of {payment.Amount} {payment.Currency} for beneficiary {payment.Beneficiary?.Name} is created and pending approval."
+            );
+
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -60,7 +76,8 @@ namespace BankingPaymentsAPI.Services
 
         public IEnumerable<PaymentDto> GetAllPayments()
         {
-            return _paymentRepo.GetAll().Select(MapToDto);
+            var payments = _paymentRepo.GetAll();
+            return payments.Select(MapToDto);
         }
 
         public PaymentDto? ApprovePayment(int id, int approverId, string remarks)
@@ -77,7 +94,14 @@ namespace BankingPaymentsAPI.Services
 
             _paymentRepo.Update(payment);
 
-            //  Log UPDATE (Approval)
+            var fromEmail = _config["Smtp:From"];
+
+            _email.SendEmailAsync(
+                payment.Client?.ContactEmail ?? fromEmail,
+                "Payment Approved",
+                $"Your payment of {payment.Amount} {payment.Currency} has been approved. Remarks: {remarks}"
+            );
+
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -101,7 +125,14 @@ namespace BankingPaymentsAPI.Services
 
             _paymentRepo.Delete(payment);
 
-            //  Log DELETE
+            var fromEmail = _config["Smtp:From"];
+
+            _email.SendEmailAsync(
+                payment.Client?.ContactEmail ?? fromEmail,
+                "Payment Deleted",
+                $"Your payment of {payment.Amount} {payment.Currency} for beneficiary {payment.Beneficiary?.Name} has been deleted."
+            );
+
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -130,7 +161,6 @@ namespace BankingPaymentsAPI.Services
             };
         }
 
-        //  Helpers
         private int GetCurrentUserId()
         {
             var userIdClaim = _httpContext.HttpContext?.User?.FindFirst("userId")?.Value;

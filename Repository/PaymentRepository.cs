@@ -1,6 +1,5 @@
 ﻿using BankingPaymentsAPI.Data;
 using BankingPaymentsAPI.Models;
-
 using Microsoft.EntityFrameworkCore;
 
 namespace BankingPaymentsAPI.Repository
@@ -18,7 +17,13 @@ namespace BankingPaymentsAPI.Repository
         {
             _context.Payments.Add(payment);
             _context.SaveChanges();
-            return payment;
+
+          
+            return _context.Payments
+                .Include(p => p.Client)
+                .Include(p => p.Beneficiary)
+                .Include(p => p.Transactions)
+                .First(p => p.Id == payment.Id);
         }
 
         public Payment? GetById(int id)

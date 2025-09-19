@@ -12,5 +12,6 @@ namespace BankingPaymentsAPI.Services
         Task<IEnumerable<DocumentDto>> GetByClientAsync(int clientId);
      
         Task<bool> DeleteAsync(int id);
+        Task<DocumentDto?> UpdateStatusAsync(int documentId, string status);
     }
 }

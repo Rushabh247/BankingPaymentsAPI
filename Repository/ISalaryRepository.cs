@@ -1,5 +1,4 @@
 ﻿using BankingPaymentsAPI.Models;
-
 using System.Collections.Generic;
 
 namespace BankingPaymentsAPI.Repository
@@ -11,5 +10,8 @@ namespace BankingPaymentsAPI.Repository
         IEnumerable<SalaryBatch> GetBatchesByClient(int clientId);
         void UpdateBatch(SalaryBatch batch);
         void DeleteBatch(SalaryBatch batch);
+
+        // Update a single SalaryPayment
+        void UpdatePayment(SalaryPayment payment);
     }
 }

@@ -4,11 +4,8 @@ using BankingPaymentsAPI.Enums;
 using BankingPaymentsAPI.Repository;
 using BankingPaymentsAPI.Models;
 using Microsoft.AspNetCore.Http;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Text.Json;
+using BankingPaymentsAPI.Services.Notification;
 
 namespace BankingPaymentsAPI.Services
 {
@@ -18,25 +15,29 @@ namespace BankingPaymentsAPI.Services
         private readonly IFileStorageService _fileStorage;
         private readonly IAuditService _audit;
         private readonly IHttpContextAccessor _httpContext;
+        private readonly IEmailNotificationService _emailNotification;
+        private readonly IClientRepository _clientRepo;
 
         public DocumentService(
             IDocumentRepository repo,
             IFileStorageService fileStorage,
             IAuditService audit,
-            IHttpContextAccessor httpContext)
+            IHttpContextAccessor httpContext,
+            IEmailNotificationService emailNotification,
+            IClientRepository clientRepo)
         {
             _repo = repo;
             _fileStorage = fileStorage;
             _audit = audit;
             _httpContext = httpContext;
+            _emailNotification = emailNotification;
+            _clientRepo = clientRepo;
         }
 
-        // Upload new document
         public async Task<DocumentUploadResultDto> UploadDocumentAsync(int clientId, IFormFile file, string documentType, int uploadedBy)
         {
             using var stream = file.OpenReadStream();
 
-            // Upload file to Cloudinary 
             var storageResult = await _fileStorage.UploadFileAsync(
                 stream,
                 file.FileName,
@@ -54,12 +55,12 @@ namespace BankingPaymentsAPI.Services
                 Url = storageResult.Url,
                 Type = Enum.TryParse<DocumentType>(documentType, true, out var dt) ? dt : DocumentType.Other,
                 UploadedAt = DateTimeOffset.UtcNow,
-                UploadedBy = uploadedBy
+                UploadedBy = uploadedBy,
+                Status = DocumentStatus.Pending
             };
 
             await _repo.AddAsync(doc);
 
-            // Log CREATE
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -70,6 +71,19 @@ namespace BankingPaymentsAPI.Services
                 NewValueJson = JsonSerializer.Serialize(doc),
                 IpAddress = GetClientIp()
             });
+
+            // Email client
+            var client = _clientRepo.GetById(clientId);
+            if (client != null && !string.IsNullOrEmpty(client.ContactEmail))
+            {
+                await _emailNotification.SendEmailAsync(
+                    client.ContactEmail,
+                    "Document Uploaded Successfully",
+                    $"<p>Dear {client.Name},</p>" +
+                    $"<p>Your document <strong>{doc.FileName}</strong> has been uploaded successfully and is pending verification.</p>" +
+                    "<p>Thank you,<br/>BankingPayments Team</p>"
+                );
+            }
 
             return new DocumentUploadResultDto
             {
@@ -82,11 +96,11 @@ namespace BankingPaymentsAPI.Services
                 CloudinaryPublicId = doc.CloudinaryPublicId,
                 Type = doc.Type.ToString(),
                 UploadedAt = doc.UploadedAt,
-                UploadedBy = doc.UploadedBy
+                UploadedBy = doc.UploadedBy,
+                Status = doc.Status.ToString()
             };
         }
 
-        // Get by Id
         public async Task<DocumentDto?> GetByIdAsync(int id)
         {
             var d = await _repo.GetByIdAsync(id);
@@ -99,11 +113,11 @@ namespace BankingPaymentsAPI.Services
                 FileName = d.FileName,
                 Url = d.Url,
                 Type = d.Type.ToString(),
-                UploadedAt = d.UploadedAt
+                UploadedAt = d.UploadedAt,
+                Status = d.Status.ToString()
             };
         }
 
-        // Get all by Client
         public async Task<IEnumerable<DocumentDto>> GetByClientAsync(int clientId)
         {
             var docs = await _repo.GetByClientIdAsync(clientId);
@@ -115,11 +129,11 @@ namespace BankingPaymentsAPI.Services
                 FileName = d.FileName,
                 Url = d.Url,
                 Type = d.Type.ToString(),
-                UploadedAt = d.UploadedAt
+                UploadedAt = d.UploadedAt,
+                Status = d.Status.ToString()
             });
         }
 
-        // Delete document (Cloudinary + DB)
         public async Task<bool> DeleteAsync(int id)
         {
             var d = await _repo.GetByIdAsync(id);
@@ -127,12 +141,9 @@ namespace BankingPaymentsAPI.Services
 
             var oldValue = JsonSerializer.Serialize(d);
 
-            // Delete from Cloudinary
             await _fileStorage.DeleteFileAsync(d.CloudinaryPublicId);
-
             await _repo.DeleteAsync(d);
 
-            // Log DELETE
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -144,10 +155,81 @@ namespace BankingPaymentsAPI.Services
                 IpAddress = GetClientIp()
             });
 
+            var client = _clientRepo.GetById(d.ClientId);
+            if (client != null && !string.IsNullOrEmpty(client.ContactEmail))
+            {
+                await _emailNotification.SendEmailAsync(
+                    client.ContactEmail,
+                    "Document Deleted",
+                    $"<p>Dear {client.Name},</p>" +
+                    $"<p>Your document <strong>{d.FileName}</strong> has been deleted from the system.</p>" +
+                    "<p>Thank you,<br/>BankingPayments Team</p>"
+                );
+            }
+
             return true;
         }
 
-        //  Helpers
+        // ✅ New: Update Status with email notification
+        public async Task<DocumentDto?> UpdateStatusAsync(int documentId, string status)
+        {
+            var doc = await _repo.GetByIdAsync(documentId);
+            if (doc == null) return null;
+
+            var oldValue = JsonSerializer.Serialize(doc);
+
+            if (Enum.TryParse<DocumentStatus>(status, true, out var newStatus))
+            {
+                doc.Status = newStatus;
+                await _repo.UpdateAsync(doc);
+
+                _audit.Log(new CreateAuditLogDto
+                {
+                    UserId = GetCurrentUserId(),
+                    Action = "UPDATE_STATUS",
+                    EntityName = nameof(Document),
+                    EntityId = doc.Id,
+                    OldValueJson = oldValue,
+                    NewValueJson = JsonSerializer.Serialize(doc),
+                    IpAddress = GetClientIp()
+                });
+
+                // Email client if Verified/Rejected
+                var client = _clientRepo.GetById(doc.ClientId);
+                if (client != null && !string.IsNullOrEmpty(client.ContactEmail))
+                {
+                    string subject = $"Document Status Update - {doc.FileName}";
+                    string body = $"<p>Dear {client.Name},</p>";
+
+                    if (doc.Status == DocumentStatus.Verified)
+                    {
+                        body += $"<p>Your document <strong>{doc.FileName}</strong> has been <span style='color:green;font-weight:bold;'>VERIFIED</span>.</p>";
+                    }
+                    else if (doc.Status == DocumentStatus.Rejected)
+                    {
+                        body += $"<p>Your document <strong>{doc.FileName}</strong> has been <span style='color:red;font-weight:bold;'>REJECTED</span>. Please re-upload valid documents.</p>";
+                    }
+
+                    body += "<p>Thank you,<br/>BankingPayments Team</p>";
+
+                    await _emailNotification.SendEmailAsync(client.ContactEmail, subject, body);
+                }
+
+                return new DocumentDto
+                {
+                    Id = doc.Id,
+                    ClientId = doc.ClientId,
+                    FileName = doc.FileName,
+                    Url = doc.Url,
+                    Type = doc.Type.ToString(),
+                    UploadedAt = doc.UploadedAt,
+                    Status = doc.Status.ToString()
+                };
+            }
+
+            return null;
+        }
+
         private int GetCurrentUserId()
         {
             var userIdClaim = _httpContext.HttpContext?.User?.FindFirst("userId")?.Value;

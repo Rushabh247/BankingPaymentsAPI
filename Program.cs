@@ -8,6 +8,7 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using BankingPaymentsAPI.Services.Notification;
 
 namespace BankingPaymentsAPI
 {
@@ -17,15 +18,19 @@ namespace BankingPaymentsAPI
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
-
+            // DbContext
             builder.Services.AddDbContext<AppDbContext>(options =>
                 options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-           
-            builder.Services.AddControllers();
+            // Controllers with JSON options (ignore cycles)
+            builder.Services.AddControllers()
+                .AddJsonOptions(opt =>
+                {
+                    opt.JsonSerializerOptions.ReferenceHandler =
+                        System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+                });
 
-            
+            // Swagger
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
             {
@@ -56,7 +61,7 @@ namespace BankingPaymentsAPI
                 });
             });
 
-        
+            // JWT Authentication
             var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]);
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
@@ -77,7 +82,7 @@ namespace BankingPaymentsAPI
 
             builder.Services.AddAuthorization();
 
-        
+            // Dependency Injection
             builder.Services.AddScoped<IUserRepository, UserRepository>();
             builder.Services.AddScoped<IUserService, UserService>();
 
@@ -99,32 +104,27 @@ namespace BankingPaymentsAPI
             builder.Services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
             builder.Services.AddScoped<IBeneficiaryService, BeneficiaryService>();
 
-
             builder.Services.AddScoped<IReportRepository, ReportRepository>();
             builder.Services.AddScoped<IReportService, ReportService>();
 
             builder.Services.AddScoped<ISalaryRepository, SalaryRepository>();
             builder.Services.AddScoped<ISalaryService, SalaryService>();
 
+            builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
 
-
-            //builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
-            //builder.Services.AddScoped<IDocumentService, DocumentService>();
-
-            builder.Services.AddScoped<IAuthService, AuthService>();
-            builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+            builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
+            builder.Services.AddScoped<IDocumentService, DocumentService>();
 
             builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
             builder.Services.AddScoped<IAuditService, AuditService>();
 
-
-            //builder.Services.AddScoped<IFileStorageService, CloudinaryFileStorageService>();
+            builder.Services.AddScoped<IFileStorageService, CloudinaryFileStorageService>();
 
             builder.Services.AddHttpContextAccessor();
 
             var app = builder.Build();
 
-            
+            // Swagger only in Development
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();

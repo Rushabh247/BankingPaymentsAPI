@@ -9,5 +9,7 @@
         public decimal Amount { get; set; }
         public string Status { get; set; }
         public string? TxnRef { get; set; }
+
+        public string? FailureReason { get; set; }
     }
 }

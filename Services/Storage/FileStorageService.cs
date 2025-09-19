@@ -23,7 +23,8 @@ namespace BankingPaymentsAPI.Services.Storage
             {
                 File = new FileDescription(fileName, fileStream),
                 Folder = folder,
-                PublicId = Guid.NewGuid().ToString() // unique id
+                PublicId = Guid.NewGuid().ToString() ,
+               
             };
 
             var uploadResult = await _cloudinary.UploadAsync(uploadParams);

@@ -51,6 +51,7 @@ namespace BankingPaymentsAPI.Services
                 AccountNumberEncrypted = Encrypt(dto.AccountNumber),
                 Salary = dto.Salary,
                 PAN = dto.PAN,
+                Email = dto.Email,
                 IsActive = true
             };
 
@@ -93,6 +94,7 @@ namespace BankingPaymentsAPI.Services
             e.FullName = dto.FullName;
             e.AccountNumberEncrypted = Encrypt(dto.AccountNumber);
             e.Salary = dto.Salary;
+            e.Email = dto.Email;
             e.PAN = dto.PAN;
 
             _repo.Update(e);
@@ -146,6 +148,7 @@ namespace BankingPaymentsAPI.Services
                 AccountNumberMasked = Mask(e.AccountNumberEncrypted),
                 Salary = e.Salary,
                 PAN = e.PAN,
+                Email = e.Email,
                 IsActive = e.IsActive
             };
 

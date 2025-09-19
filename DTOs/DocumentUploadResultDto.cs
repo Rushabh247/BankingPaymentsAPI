@@ -10,6 +10,8 @@
         public string Url { get; set; }
         public string CloudinaryPublicId { get; set; }
         public string Type { get; set; }
+
+        public string Status { get; set; }
         public DateTimeOffset UploadedAt { get; set; }
         public int UploadedBy { get; set; }
     }

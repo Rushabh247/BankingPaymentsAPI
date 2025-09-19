@@ -1,6 +1,5 @@
 ﻿using BankingPaymentsAPI.Data;
 using BankingPaymentsAPI.Models;
-
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,6 +29,7 @@ namespace BankingPaymentsAPI.Repository
         public IEnumerable<SalaryBatch> GetBatchesByClient(int clientId)
         {
             return _context.SalaryBatches
+                .Include(b => b.Items)
                 .Where(b => b.ClientId == clientId)
                 .ToList();
         }
@@ -43,6 +43,13 @@ namespace BankingPaymentsAPI.Repository
         public void DeleteBatch(SalaryBatch batch)
         {
             _context.SalaryBatches.Remove(batch);
+            _context.SaveChanges();
+        }
+
+        //  Update a single SalaryPayment
+        public void UpdatePayment(SalaryPayment payment)
+        {
+            _context.SalaryPayments.Update(payment);
             _context.SaveChanges();
         }
     }
