@@ -5,7 +5,7 @@
 namespace BankingPaymentsAPI.Migrations
 {
     /// <inheritdoc />
-    public partial class fourth : Migration
+    public partial class seventh : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

@@ -2,6 +2,7 @@
 using BankingPaymentsAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Controllers
 {
@@ -18,46 +19,46 @@ namespace BankingPaymentsAPI.Controllers
 
         // Create a new beneficiary
         [HttpPost]
-       // [Authorize(Roles = "Admin,BankUser")]
-        public IActionResult Create([FromBody] BeneficiaryRequestDto dto, [FromQuery] int createdBy)
+        // [Authorize(Roles = "Admin,BankUser")]
+        public async Task<IActionResult> Create([FromBody] BeneficiaryRequestDto dto, [FromQuery] int createdBy)
         {
-            var createdBeneficiary = _service.CreateBeneficiary(dto, createdBy);
+            var createdBeneficiary = await _service.CreateBeneficiaryAsync(dto, createdBy);
             return CreatedAtAction(nameof(GetById), new { id = createdBeneficiary.Id }, createdBeneficiary);
         }
 
         // Get beneficiary by ID
         [HttpGet("{id}")]
-      //  [Authorize(Roles = "Admin,BankUser")]
-        public IActionResult GetById(int id)
+        // [Authorize(Roles = "Admin,BankUser")]
+        public async Task<IActionResult> GetById(int id)
         {
-            var beneficiary = _service.GetById(id);
+            var beneficiary = await _service.GetByIdAsync(id);
             return beneficiary == null ? NotFound($"Beneficiary with ID {id} not found.") : Ok(beneficiary);
         }
 
         // Get all beneficiaries for a client
         [HttpGet("by-client/{clientId}")]
-       // [Authorize(Roles = "Admin,BankUser")]
-        public IActionResult GetByClient(int clientId)
+        // [Authorize(Roles = "Admin,BankUser")]
+        public async Task<IActionResult> GetByClient(int clientId)
         {
-            var beneficiaries = _service.GetByClient(clientId);
+            var beneficiaries = await _service.GetByClientAsync(clientId);
             return Ok(beneficiaries);
         }
 
         // Update beneficiary
         [HttpPut("{id}")]
-      //  [Authorize(Roles = "Admin,BankUser")]
-        public IActionResult Update(int id, [FromBody] BeneficiaryRequestDto dto)
+        // [Authorize(Roles = "Admin,BankUser")]
+        public async Task<IActionResult> Update(int id, [FromBody] BeneficiaryRequestDto dto)
         {
-            var updatedBeneficiary = _service.Update(id, dto);
+            var updatedBeneficiary = await _service.UpdateAsync(id, dto);
             return updatedBeneficiary == null ? NotFound($"Beneficiary with ID {id} not found.") : Ok(updatedBeneficiary);
         }
 
         // Soft delete beneficiary
         [HttpDelete("{id}")]
-       // [Authorize(Roles = "Admin")]
-        public IActionResult Delete(int id)
+        // [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Delete(int id)
         {
-            var result = _service.Delete(id);
+            var result = await _service.DeleteAsync(id);
             return result ? NoContent() : NotFound($"Beneficiary with ID {id} not found.");
         }
     }

@@ -1,7 +1,7 @@
 ﻿using BankingPaymentsAPI.DTOs;
 using BankingPaymentsAPI.Services;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Controllers
 {
@@ -16,48 +16,45 @@ namespace BankingPaymentsAPI.Controllers
             _service = service;
         }
 
-        // Request a new report
         [HttpPost]
-       // [Authorize(Roles = "Admin,BankUser")]
-        public IActionResult RequestReport([FromBody] ReportRequestCreateDto dto, [FromQuery] int requestedBy)
+        public async Task<IActionResult> RequestReport([FromBody] ReportRequestCreateDto dto, [FromQuery] int requestedBy)
         {
-            var report = _service.RequestReport(dto, requestedBy);
+            var report = await _service.RequestReportAsync(dto, requestedBy);
             return CreatedAtAction(nameof(GetById), new { id = report.Id }, report);
         }
 
-        // Get report by ID
         [HttpGet("{id}")]
-      //  [Authorize(Roles = "Admin,BankUser")]
-        public IActionResult GetById(int id)
+        public async Task<IActionResult> GetById(int id)
         {
-            var report = _service.GetById(id);
+            var report = await _service.GetByIdAsync(id);
             return report == null ? NotFound($"Report with ID {id} not found.") : Ok(report);
         }
 
-        // Get all reports
         [HttpGet]
-      //  [Authorize(Roles = "Admin,BankUser")]
-        public IActionResult GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] int? clientId, [FromQuery] string fromDate, [FromQuery] string toDate)
         {
-            var reports = _service.GetAll();
+            var reports = await _service.GetReportsAsync(clientId, fromDate, toDate);
             return Ok(reports);
         }
 
-        // Mark report as completed
-        [HttpPut("complete/{id}")]
-       // [Authorize(Roles = "Admin")]
-        public IActionResult MarkCompleted(int id, [FromQuery] string resultUrl)
+        [HttpGet("type/{reportType}")]
+        public async Task<IActionResult> GetByType(string reportType, [FromQuery] int? clientId)
         {
-            _service.MarkCompleted(id, resultUrl);
+            var data = await _service.GetReportDataByTypeAsync(reportType, clientId);
+            return Ok(data);
+        }
+
+        [HttpPut("generate/{id}")]
+        public async Task<IActionResult> GenerateReport(int id)
+        {
+            await _service.GenerateAndCompleteReportAsync(id);
             return NoContent();
         }
 
-        // Mark report as failed
         [HttpPut("fail/{id}")]
-      //  [Authorize(Roles = "Admin")]
-        public IActionResult MarkFailed(int id, [FromQuery] string reason)
+        public async Task<IActionResult> MarkFailed(int id, [FromQuery] string reason)
         {
-            _service.MarkFailed(id, reason);
+            await _service.MarkFailedAsync(id, reason);
             return NoContent();
         }
     }

@@ -11,7 +11,8 @@ namespace BankingPaymentsAPI.Repository
         void UpdateBatch(SalaryBatch batch);
         void DeleteBatch(SalaryBatch batch);
 
-        // Update a single SalaryPayment
+        
+        SalaryPayment? GetPaymentById(int id);
         void UpdatePayment(SalaryPayment payment);
     }
 }

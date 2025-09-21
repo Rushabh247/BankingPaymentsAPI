@@ -1,8 +1,8 @@
 ﻿using BankingPaymentsAPI.Data;
 using BankingPaymentsAPI.Models;
-
+using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
-using System.Linq;
+using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Repository
 {
@@ -11,22 +11,23 @@ namespace BankingPaymentsAPI.Repository
         private readonly AppDbContext _context;
         public ReportRepository(AppDbContext context) => _context = context;
 
-        public ReportRequest Add(ReportRequest request)
+        public async Task<ReportRequest> AddAsync(ReportRequest request)
         {
-            _context.ReportRequests.Add(request);
-            _context.SaveChanges();
+            await _context.ReportRequests.AddAsync(request);
+            await _context.SaveChangesAsync();
             return request;
         }
 
-        public ReportRequest? GetById(int id) =>
-            _context.ReportRequests.FirstOrDefault(r => r.Id == id);
+        public async Task<ReportRequest?> GetByIdAsync(int id) =>
+            await _context.ReportRequests.FirstOrDefaultAsync(r => r.Id == id);
 
-        public IEnumerable<ReportRequest> GetAll() => _context.ReportRequests.ToList();
+        public async Task<IEnumerable<ReportRequest>> GetAllAsync() =>
+            await _context.ReportRequests.ToListAsync();
 
-        public void Update(ReportRequest request)
+        public async Task UpdateAsync(ReportRequest request)
         {
             _context.ReportRequests.Update(request);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
         }
     }
 }

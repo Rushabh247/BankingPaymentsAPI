@@ -2,8 +2,12 @@
 using BankingPaymentsAPI.Enums;
 using BankingPaymentsAPI.Models;
 using BankingPaymentsAPI.Repository;
+using BankingPaymentsAPI.Services.ReportGeneration;
 using Microsoft.AspNetCore.Http;
 using System.Text.Json;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace BankingPaymentsAPI.Services
 {
@@ -12,28 +16,42 @@ namespace BankingPaymentsAPI.Services
         private readonly IReportRepository _repo;
         private readonly IAuditService _audit;
         private readonly IHttpContextAccessor _httpContext;
+        private readonly IReportGeneratorService _reportGenerator;
 
-        public ReportService(IReportRepository repo, IAuditService audit, IHttpContextAccessor httpContext)
+        private readonly ITransactionService _transactionService;
+        private readonly ISalaryRepository _salaryRepo;
+        
+
+        public ReportService(
+            IReportRepository repo,
+            IAuditService audit,
+            IHttpContextAccessor httpContext,
+            IReportGeneratorService reportGenerator,
+            ITransactionService transactionService,
+            ISalaryRepository salaryRepo)   
         {
             _repo = repo;
             _audit = audit;
             _httpContext = httpContext;
+            _reportGenerator = reportGenerator;
+            _transactionService = transactionService;
+            _salaryRepo = salaryRepo;
         }
 
-        public ReportRequestDto RequestReport(ReportRequestCreateDto dto, int requestedBy)
+
+        public async Task<ReportRequestDto> RequestReportAsync(ReportRequestCreateDto dto, int requestedBy)
         {
             var r = new ReportRequest
             {
                 RequestedBy = requestedBy,
-                ReportType = dto.ReportType,
+                ReportType = (ReportType)dto.ReportType,
                 ParametersJson = dto.ParametersJson,
                 Status = ReportStatus.Pending,
                 RequestedAt = DateTimeOffset.UtcNow
             };
 
-            _repo.Add(r);
+            await _repo.AddAsync(r);
 
-            // Log CREATE
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -48,26 +66,80 @@ namespace BankingPaymentsAPI.Services
             return MapToDto(r);
         }
 
-        public ReportRequestDto? GetById(int id)
+        public async Task<IEnumerable<ReportRequestDto>> GetReportsAsync(int? clientId = null, string fromDateStr = null, string toDateStr = null)
         {
-            var r = _repo.GetById(id);
+            var reports = await _repo.GetAllAsync();
+
+            DateTimeOffset? fromDate = null;
+            DateTimeOffset? toDate = null;
+            if (DateTimeOffset.TryParse(fromDateStr, out var f)) fromDate = f;
+            if (DateTimeOffset.TryParse(toDateStr, out var t)) toDate = t;
+
+            return reports.Where(r =>
+            {
+                var parameters = JsonSerializer.Deserialize<Dictionary<string, string>>(r.ParametersJson);
+                bool clientMatch = !clientId.HasValue || (parameters.ContainsKey("clientId") && parameters["clientId"] == clientId.Value.ToString());
+                bool dateMatch = true;
+
+                if (fromDate.HasValue && toDate.HasValue)
+                {
+                    if (parameters.ContainsKey("fromDate") && parameters.ContainsKey("toDate"))
+                    {
+                        var reportFrom = DateTimeOffset.Parse(parameters["fromDate"]);
+                        var reportTo = DateTimeOffset.Parse(parameters["toDate"]);
+                        dateMatch = reportFrom >= fromDate && reportTo <= toDate;
+                    }
+                }
+
+                return clientMatch && dateMatch;
+            }).Select(MapToDto);
+        }
+        public async Task<object> GetReportDataByTypeAsync(string reportType, int? clientId = null)
+        {
+            if (Enum.TryParse<ReportType>(reportType, true, out var type))
+            {
+                switch (type)
+                {
+                    case ReportType.TransactionReport:
+                        return _transactionService.GetAll();
+
+                    case ReportType.SalaryDisbursementReport:
+                        if (clientId.HasValue)
+                            return _salaryRepo.GetBatchesByClient(clientId.Value);
+                        return _salaryRepo.GetBatchesByClient(0); 
+
+                    case ReportType.AuditLogReport:
+                        return _audit.GetAll();
+
+                    default:
+                        throw new ArgumentException("Unsupported report type");
+                }
+            }
+            throw new ArgumentException("Invalid report type");
+        }
+
+
+
+        public async Task<ReportRequestDto?> GetByIdAsync(int id)
+        {
+            var r = await _repo.GetByIdAsync(id);
             return r == null ? null : MapToDto(r);
         }
 
-        public IEnumerable<ReportRequestDto> GetAll() => _repo.GetAll().Select(MapToDto);
-
-        public void MarkCompleted(int id, string resultUrl)
+        public async Task GenerateAndCompleteReportAsync(int id)
         {
-            var r = _repo.GetById(id);
+            var r = await _repo.GetByIdAsync(id);
             if (r == null) return;
 
             var oldValue = JsonSerializer.Serialize(r);
 
-            r.Status = ReportStatus.Completed;
-            r.ResultUrl = resultUrl;
-            _repo.Update(r);
+            var reportTypeEnum = (ReportType)r.ReportType;
+            var url = await _reportGenerator.GenerateReportAsync(r.ParametersJson, reportTypeEnum);
 
-            // Log UPDATE
+            r.Status = ReportStatus.Completed;
+            r.ResultUrl = url;
+            await _repo.UpdateAsync(r);
+
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -80,18 +152,17 @@ namespace BankingPaymentsAPI.Services
             });
         }
 
-        public void MarkFailed(int id, string reason)
+        public async Task MarkFailedAsync(int id, string reason)
         {
-            var r = _repo.GetById(id);
+            var r = await _repo.GetByIdAsync(id);
             if (r == null) return;
 
             var oldValue = JsonSerializer.Serialize(r);
 
             r.Status = ReportStatus.Failed;
             r.ResultUrl = reason;
-            _repo.Update(r);
+            await _repo.UpdateAsync(r);
 
-            //  Log UPDATE
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -116,7 +187,6 @@ namespace BankingPaymentsAPI.Services
                 RequestedAt = r.RequestedAt
             };
 
-        //  Helpers
         private int GetCurrentUserId()
         {
             var userIdClaim = _httpContext.HttpContext?.User?.FindFirst("userId")?.Value;

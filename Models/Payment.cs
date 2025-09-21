@@ -1,5 +1,4 @@
 ﻿using System.Text.Json.Serialization;
-using System.Transactions;
 using BankingPaymentsAPI.Enums;
 
 namespace BankingPaymentsAPI.Models
@@ -7,6 +6,7 @@ namespace BankingPaymentsAPI.Models
     public class Payment
     {
         public int Id { get; set; }
+
         public int ClientId { get; set; }
         public Client Client { get; set; }
 
@@ -25,5 +25,9 @@ namespace BankingPaymentsAPI.Models
         public string? BankTransactionRef { get; set; }
 
         public ICollection<Transaction> Transactions { get; set; }
+
+        // 🔹 NEW Hybrid fields
+        public PaymentMethod Method { get; set; } = PaymentMethod.Internal; // Internal (default) or Stripe
+        public string? StripePaymentIntentId { get; set; } // Used only when Method == Stripe
     }
 }

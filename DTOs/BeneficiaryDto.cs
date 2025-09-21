@@ -8,6 +8,8 @@
         public string AccountNumberMasked { get; set; } // masked for UI
         public string IFSC { get; set; }
         public string BankName { get; set; }
+
+        public decimal Balance { get; set; }
         public bool IsActive { get; set; }
     }
 }

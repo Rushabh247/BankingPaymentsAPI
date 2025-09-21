@@ -1,9 +1,12 @@
-﻿namespace BankingPaymentsAPI.Models
+﻿using System.Text.Json.Serialization;
+
+namespace BankingPaymentsAPI.Models
 {
     public class Transaction
     {
         public int Id { get; set; }
         public int? PaymentId { get; set; }
+        [JsonIgnore]
         public Payment Payment { get; set; }
 
         public decimal Amount { get; set; }

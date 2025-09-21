@@ -1,14 +1,15 @@
 ﻿using BankingPaymentsAPI.DTOs;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Services
 {
     public interface IBeneficiaryService
     {
-        BeneficiaryDto CreateBeneficiary(BeneficiaryRequestDto dto, int createdBy);
-        BeneficiaryDto? GetById(int id);
-        IEnumerable<BeneficiaryDto> GetByClient(int clientId);
-        BeneficiaryDto? Update(int id, BeneficiaryRequestDto dto);
-        bool Delete(int id);
+        Task<BeneficiaryDto> CreateBeneficiaryAsync(BeneficiaryRequestDto dto, int createdBy);
+        Task<BeneficiaryDto?> GetByIdAsync(int id);
+        Task<IEnumerable<BeneficiaryDto>> GetByClientAsync(int clientId);
+        Task<BeneficiaryDto?> UpdateAsync(int id, BeneficiaryRequestDto dto);
+        Task<bool> DeleteAsync(int id);
     }
 }

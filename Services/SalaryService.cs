@@ -2,263 +2,163 @@
 using BankingPaymentsAPI.Enums;
 using BankingPaymentsAPI.Models;
 using BankingPaymentsAPI.Repository;
-using BankingPaymentsAPI.Services.Notification;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Configuration;
-using System.Text.Json;
 
 namespace BankingPaymentsAPI.Services
 {
     public class SalaryService : ISalaryService
     {
-        private readonly ISalaryRepository _repo;
-        private readonly IEmployeeRepository _employeeRepo;
-        private readonly IAuditService _audit;
-        private readonly IHttpContextAccessor _httpContext;
-        private readonly IEmailNotificationService _email;
-        private readonly IConfiguration _config;
+        private readonly ISalaryRepository _salaryRepo;
+        private readonly IPaymentService _paymentService;
 
-        public SalaryService(
-            ISalaryRepository repo,
-            IEmployeeRepository employeeRepo,
-            IAuditService audit,
-            IHttpContextAccessor httpContext,
-            IEmailNotificationService email,
-            IConfiguration config)
+        public SalaryService(ISalaryRepository salaryRepo, IPaymentService paymentService)
         {
-            _repo = repo;
-            _employeeRepo = employeeRepo;
-            _audit = audit;
-            _httpContext = httpContext;
-            _email = email;
-            _config = config;
+            _salaryRepo = salaryRepo;
+            _paymentService = paymentService;
         }
 
-        // ✅ Create a new salary batch
         public SalaryBatchDto CreateBatch(SalaryBatchRequestDto request, int createdBy)
         {
             var batch = new SalaryBatch
             {
                 ClientId = request.ClientId,
                 BatchCode = request.BatchCode,
-                Status = BatchStatus.Created,
                 TotalAmount = request.Items.Sum(i => i.Amount),
+                Status = BatchStatus.Created,
                 Items = request.Items.Select(i => new SalaryPayment
                 {
                     EmployeeId = i.EmployeeId,
                     Amount = i.Amount,
                     Status = PaymentStatus.Draft,
-                    TxnRef = Guid.NewGuid().ToString()
+                    Method = request.Method
                 }).ToList()
             };
 
-            _repo.AddBatch(batch);
+            _salaryRepo.AddBatch(batch);
 
-            // Notify client
-            var fromEmail = _config["Smtp:From"];
-            _email.SendEmailAsync(
-                batch.Client?.ContactEmail ?? fromEmail,
-                "Salary Batch Created",
-                $"A new salary batch ({batch.BatchCode}) has been created with {batch.Items.Count} employees."
-            );
-
-            // Log CREATE
-            _audit.Log(new CreateAuditLogDto
-            {
-                UserId = GetCurrentUserId(),
-                Action = "CREATE_BATCH",
-                EntityName = nameof(SalaryBatch),
-                EntityId = batch.Id,
-                OldValueJson = null,
-                NewValueJson = JsonSerializer.Serialize(batch),
-                IpAddress = GetClientIp()
-            });
-
-            return MapToDto(batch);
+            return MapBatchToDto(batch);
         }
 
-        // ✅ Submit salary batch (process all payments)
+        public SalaryBatchDto? GetBatchById(int id)
+        {
+            var batch = _salaryRepo.GetBatchById(id);
+            if (batch == null) return null;
+
+            return MapBatchToDto(batch);
+        }
+
+        public IEnumerable<SalaryBatchDto> GetBatchesByClient(int clientId)
+        {
+            var batches = _salaryRepo.GetBatchesByClient(clientId);
+            return batches.Select(MapBatchToDto);
+        }
+
         public SalaryBatchDto? SubmitBatch(int id, int submittedBy)
         {
-            var b = _repo.GetBatchById(id);
-            if (b == null) return null;
+            var batch = _salaryRepo.GetBatchById(id);
+            if (batch == null) return null;
 
-            var oldValue = JsonSerializer.Serialize(b);
-
-            b.Status = BatchStatus.Submitted;
-            foreach (var p in b.Items)
+            batch.Status = BatchStatus.Submitted;
+            foreach (var item in batch.Items)
             {
-                // simulate processing
-                if (p.Amount > 100000) // example failure condition
-                {
-                    p.Status = PaymentStatus.Failed;
-                    p.FailureReason = "Amount exceeds transfer limit";
-                }
-                else
-                {
-                    p.Status = PaymentStatus.Processed;
-                    p.FailureReason = null;
-                }
+                item.Status = PaymentStatus.PendingApproval;
             }
 
-            _repo.UpdateBatch(b);
-
-            // Send notification
-            var fromEmail = _config["Smtp:From"];
-            _email.SendEmailAsync(
-                b.Client?.ContactEmail ?? fromEmail,
-                "Salary Batch Submitted",
-                $"Salary batch ({b.BatchCode}) submitted. " +
-                $"Processed {b.Items.Count(i => i.Status == PaymentStatus.Processed)} " +
-                $"and Failed {b.Items.Count(i => i.Status == PaymentStatus.Failed)} payments."
-            );
-
-            // Log SUBMIT
-            _audit.Log(new CreateAuditLogDto
-            {
-                UserId = GetCurrentUserId(),
-                Action = "SUBMIT_BATCH",
-                EntityName = nameof(SalaryBatch),
-                EntityId = b.Id,
-                OldValueJson = oldValue,
-                NewValueJson = JsonSerializer.Serialize(b),
-                IpAddress = GetClientIp()
-            });
-
-            return MapToDto(b);
+            _salaryRepo.UpdateBatch(batch);
+            return MapBatchToDto(batch);
         }
 
-        // Retry or process a specific payment
+        public bool DeleteBatch(int id)
+        {
+            var batch = _salaryRepo.GetBatchById(id);
+            if (batch == null) return false;
+
+            _salaryRepo.DeleteBatch(batch);
+            return true;
+        }
+
         public SalaryPaymentDto? ProcessPayment(int paymentId)
         {
-            var batch = _repo.GetBatchById(paymentId);
-            var payment = batch?.Items.FirstOrDefault(p => p.Id == paymentId);
+            var payment = _salaryRepo.GetPaymentById(paymentId);
             if (payment == null) return null;
 
-            var oldValue = JsonSerializer.Serialize(payment);
+            // Example: internal transfer
+            payment.Status = PaymentStatus.Processed;
+            _salaryRepo.UpdatePayment(payment);
 
-            if (payment.Amount > 100000)
+            return MapPaymentToDto(payment);
+        }
+
+        public SalaryPaymentDto? ProcessStripePayment(int paymentId)
+        {
+            var payment = _salaryRepo.GetPaymentById(paymentId);
+            if (payment == null) return null;
+
+            // create Stripe payment intent here
+            payment.Method = PaymentMethod.Stripe;
+            payment.Status = PaymentStatus.PendingApproval;
+
+            _salaryRepo.UpdatePayment(payment);
+            return MapPaymentToDto(payment);
+        }
+
+        public SalaryPaymentDto? ConfirmStripeSalaryPayment(string paymentIntentId, int approverId)
+        {
+            // Find the payment by Stripe intent
+            var payment = _salaryRepo.GetBatchesByClient(0) // replace with actual method to get payment by Stripe ID
+                .SelectMany(b => b.Items)
+                .FirstOrDefault(p => p.StripePaymentIntentId == paymentIntentId);
+
+            if (payment == null) return null;
+
+            payment.Status = PaymentStatus.Processed;
+            _salaryRepo.UpdatePayment(payment);
+            return MapPaymentToDto(payment);
+        }
+
+        // ---------------- Helpers ----------------
+
+        private SalaryBatchDto MapBatchToDto(SalaryBatch batch)
+        {
+            return new SalaryBatchDto
             {
-                payment.Status = PaymentStatus.Failed;
-                payment.FailureReason = "Amount exceeds transfer limit (retry failed)";
-            }
-            else
-            {
-                payment.Status = PaymentStatus.Processed;
-                payment.FailureReason = null;
-            }
+                Id = batch.Id,
+                ClientId = batch.ClientId,
+                BatchCode = batch.BatchCode,
+                TotalAmount = batch.TotalAmount,
+                Status = ConvertBatchStatusToPaymentStatus(batch.Status),
+                Items = batch.Items.Select(MapPaymentToDto).ToList(),
+                Method = batch.Items.FirstOrDefault()?.Method ?? PaymentMethod.Internal
+            };
+        }
 
-            _repo.UpdatePayment(payment);
-
-            // Notify employee
-            if (!string.IsNullOrEmpty(payment.Employee?.Email))
-            {
-                _email.SendEmailAsync(
-                    payment.Employee.Email,
-                    "Salary Payment Update",
-                    $"Salary payment for {payment.Employee.FullName} is {payment.Status}. " +
-                    $"{(payment.Status == PaymentStatus.Failed ? "Reason: " + payment.FailureReason : "")}"
-                );
-            }
-
-            // Log
-            _audit.Log(new CreateAuditLogDto
-            {
-                UserId = GetCurrentUserId(),
-                Action = "PROCESS_PAYMENT",
-                EntityName = nameof(SalaryPayment),
-                EntityId = payment.Id,
-                OldValueJson = oldValue,
-                NewValueJson = JsonSerializer.Serialize(payment),
-                IpAddress = GetClientIp()
-            });
-
+        private SalaryPaymentDto MapPaymentToDto(SalaryPayment payment)
+        {
             return new SalaryPaymentDto
             {
                 Id = payment.Id,
                 EmployeeId = payment.EmployeeId,
-                EmployeeName = payment.Employee?.FullName ?? "Unknown",
+                EmployeeName = payment.Employee?.FullName ?? "",
                 Amount = payment.Amount,
-                Status = payment.Status.ToString(),
+                Status = payment.Status,
                 TxnRef = payment.TxnRef,
-                FailureReason = payment.FailureReason
+                FailureReason = payment.FailureReason,
+                SalaryBatchId = null, // optional, if needed add reference
+                Method = payment.Method,
+                StripePaymentIntentId = payment.StripePaymentIntentId
             };
         }
 
-        //  Get batch by Id
-        public SalaryBatchDto? GetBatchById(int id)
+        private PaymentStatus ConvertBatchStatusToPaymentStatus(BatchStatus status)
         {
-            var b = _repo.GetBatchById(id);
-            return b == null ? null : MapToDto(b);
-        }
-
-        //  Get batches by client
-        public IEnumerable<SalaryBatchDto> GetBatchesByClient(int clientId)
-        {
-            return _repo.GetBatchesByClient(clientId).Select(MapToDto);
-        }
-
-        // Delete batch
-        public bool DeleteBatch(int id)
-        {
-            var b = _repo.GetBatchById(id);
-            if (b == null) return false;
-
-            _repo.DeleteBatch(b);
-
-            // log + notify
-            _audit.Log(new CreateAuditLogDto
+            return status switch
             {
-                UserId = GetCurrentUserId(),
-                Action = "DELETE_BATCH",
-                EntityName = nameof(SalaryBatch),
-                EntityId = b.Id,
-                OldValueJson = JsonSerializer.Serialize(b),
-                NewValueJson = null,
-                IpAddress = GetClientIp()
-            });
-
-            var fromEmail = _config["Smtp:From"];
-            _email.SendEmailAsync(
-                b.Client?.ContactEmail ?? fromEmail,
-                "Salary Batch Deleted",
-                $"Salary batch ({b.BatchCode}) has been deleted."
-            );
-
-            return true;
-        }
-
-        //  Helper: map model to DTO
-        private SalaryBatchDto MapToDto(SalaryBatch b) =>
-            new SalaryBatchDto
-            {
-                Id = b.Id,
-                ClientId = b.ClientId,
-                BatchCode = b.BatchCode,
-                TotalAmount = b.TotalAmount,
-                Status = b.Status.ToString(),
-                Items = b.Items?.Select(i => new SalaryPaymentDto
-                {
-                    Id = i.Id,
-                    EmployeeId = i.EmployeeId,
-                    EmployeeName = i.Employee?.FullName ?? "Unknown",
-                    Amount = i.Amount,
-                    Status = i.Status.ToString(),
-                    TxnRef = i.TxnRef,
-                    FailureReason = i.FailureReason
-                }).ToList() ?? new List<SalaryPaymentDto>()
+                BatchStatus.Created => PaymentStatus.Draft,
+                BatchStatus.Submitted => PaymentStatus.PendingApproval,
+                BatchStatus.Approved => PaymentStatus.Approved,
+                BatchStatus.Processed => PaymentStatus.Processed,
+                BatchStatus.Failed => PaymentStatus.Failed,
+                _ => PaymentStatus.Draft
             };
-
-        // Helpers
-        private int GetCurrentUserId()
-        {
-            var userIdClaim = _httpContext.HttpContext?.User?.FindFirst("userId")?.Value;
-            return int.TryParse(userIdClaim, out var id) ? id : 0;
-        }
-
-        private string GetClientIp()
-        {
-            return _httpContext.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
         }
     }
 }

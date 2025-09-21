@@ -3,7 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using BankingPaymentsAPI.Data;
 using BankingPaymentsAPI.DTOs;
-using BankingPaymentsAPI.Helpers; // <-- include PasswordHelper
+using BankingPaymentsAPI.Helpers; 
 using BankingPaymentsAPI.Helpers.BankingPaymentsAPI.Helpers;
 using BankingPaymentsAPI.Models;
 using BankingPaymentsAPI.Repository;

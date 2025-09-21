@@ -56,5 +56,15 @@ namespace BankingPaymentsAPI.Repository
             _context.Payments.Remove(payment);
             _context.SaveChanges();
         }
+
+        public Payment? GetByStripeId(string paymentIntentId)
+        {
+            return _context.Payments
+                .AsNoTracking()
+                .Include(p => p.Client)
+                .Include(p => p.Beneficiary)
+                .Include(p => p.Transactions)
+                .FirstOrDefault(p => p.StripePaymentIntentId == paymentIntentId);
+        }
     }
 }

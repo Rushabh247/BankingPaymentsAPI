@@ -1,33 +1,42 @@
 ﻿using BankingPaymentsAPI.Enums;
-using BankingPaymentsAPI.Models;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
-public class Client
+namespace BankingPaymentsAPI.Models
 {
-    public int Id { get; set; }
+    public class Client
+    {
+        public int Id { get; set; }
 
-    public int BankId { get; set; }
-    public Bank Bank { get; set; }
+        public int BankId { get; set; }
+        public Bank Bank { get; set; }
 
-    public string ClientCode { get; set; }
-    public string Name { get; set; }
-    public string ContactEmail { get; set; }
-    public string ContactPhone { get; set; }
+        public string ClientCode { get; set; }
+        public string Name { get; set; }
+        public string ContactEmail { get; set; }
+        public string ContactPhone { get; set; }
 
-    public OnboardingStatus OnboardingStatus { get; set; } = OnboardingStatus.Pending;
-    public bool IsVerified { get; set; }
-    public DateTimeOffset? VerifiedAt { get; set; }
-    public int? VerifiedBy { get; set; }
+        public OnboardingStatus OnboardingStatus { get; set; } = OnboardingStatus.Pending;
+        public bool IsVerified { get; set; }
+        public DateTimeOffset? VerifiedAt { get; set; }
+        public int? VerifiedBy { get; set; }
 
-    // Relations
-    public ICollection<Beneficiary> Beneficiaries { get; set; } = new List<Beneficiary>();
-    public ICollection<Employee> Employees { get; set; } = new List<Employee>();
-    public ICollection<Document> Documents { get; set; } = new List<Document>();
+       
+        public decimal Balance { get; set; } = 0m;
+        public string? StripePaymentIntentId { get; set; }
 
-    // **Add this for SalaryBatches**
-    public ICollection<SalaryBatch> SalaryBatches { get; set; } = new List<SalaryBatch>();
+        [Timestamp]
+        public byte[] RowVersion { get; set; }
 
-    public User User { get; set; }
+        // Relations
+        public ICollection<Beneficiary> Beneficiaries { get; set; } = new List<Beneficiary>();
+        public ICollection<Employee> Employees { get; set; } = new List<Employee>();
+        public ICollection<Document> Documents { get; set; } = new List<Document>();
+        public ICollection<SalaryBatch> SalaryBatches { get; set; } = new List<SalaryBatch>();
 
-    public DateTimeOffset CreatedAt { get; set; }
-    public int CreatedBy { get; set; }
+        public User User { get; set; }
+
+        public DateTimeOffset CreatedAt { get; set; }
+        public int CreatedBy { get; set; }
+    }
 }

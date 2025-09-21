@@ -9,6 +9,8 @@
         public string ContactNumber { get; set; }
         public bool IsActive { get; set; } = true;
 
+        public decimal AccountBalance { get; set; } = 0;
+
         public ICollection<Client> Clients { get; set; }
         public ICollection<User> Users { get; set; } // BankUsers
     }

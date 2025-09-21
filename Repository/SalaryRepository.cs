@@ -30,6 +30,7 @@ namespace BankingPaymentsAPI.Repository
         {
             return _context.SalaryBatches
                 .Include(b => b.Items)
+                .ThenInclude(i => i.Employee)
                 .Where(b => b.ClientId == clientId)
                 .ToList();
         }
@@ -46,7 +47,14 @@ namespace BankingPaymentsAPI.Repository
             _context.SaveChanges();
         }
 
-        //  Update a single SalaryPayment
+        public SalaryPayment? GetPaymentById(int id)
+        {
+            return _context.SalaryPayments
+                .Include(p => p.Employee)
+                .Include(p => p.SalaryBatch)   
+                .FirstOrDefault(p => p.Id == id);
+        }
+
         public void UpdatePayment(SalaryPayment payment)
         {
             _context.SalaryPayments.Update(payment);

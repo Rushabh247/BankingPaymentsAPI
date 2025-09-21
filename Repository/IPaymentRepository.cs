@@ -9,5 +9,7 @@ namespace BankingPaymentsAPI.Repository
         IEnumerable<Payment> GetAll();
         void Update(Payment payment);
         void Delete(Payment payment);
+
+        Payment? GetByStripeId(string paymentIntentId);
     }
 }

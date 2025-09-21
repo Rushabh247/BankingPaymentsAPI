@@ -15,30 +15,18 @@ namespace BankingPaymentsAPI.Services
         private readonly IAuditService _audit;
         private readonly IHttpContextAccessor _httpContext;
 
-        public EmployeeService(
-            IEmployeeRepository repo,
-            IAuditService audit,
-            IHttpContextAccessor httpContext)
+        public EmployeeService(IEmployeeRepository repo, IAuditService audit, IHttpContextAccessor httpContext)
         {
             _repo = repo;
             _audit = audit;
             _httpContext = httpContext;
         }
 
-        //  Encryption helpers
-        private string Encrypt(string plain) =>
-            Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(plain));
-
-        private string Mask(string encrypted)
+        private string Mask(string accountNumber)
         {
-            try
-            {
-                var bytes = Convert.FromBase64String(encrypted);
-                var plain = System.Text.Encoding.UTF8.GetString(bytes);
-                if (plain.Length <= 4) return "****";
-                return new string('*', plain.Length - 4) + plain[^4..];
-            }
-            catch { return "****"; }
+            if (string.IsNullOrEmpty(accountNumber)) return "****";
+            if (accountNumber.Length <= 4) return "****";
+            return new string('*', accountNumber.Length - 4) + accountNumber[^4..];
         }
 
         public EmployeeDto CreateEmployee(EmployeeRequestDto dto, int createdBy)
@@ -46,18 +34,14 @@ namespace BankingPaymentsAPI.Services
             var e = new Employee
             {
                 ClientId = dto.ClientId,
-                EmployeeCode = dto.EmployeeCode,
                 FullName = dto.FullName,
-                AccountNumberEncrypted = Encrypt(dto.AccountNumber),
-                Salary = dto.Salary,
-                PAN = dto.PAN,
+                AccountNumber = dto.AccountNumber,
                 Email = dto.Email,
-                IsActive = true
+                Balance = 0m
             };
 
             _repo.Add(e);
 
-            //  Log CREATE
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -90,16 +74,12 @@ namespace BankingPaymentsAPI.Services
 
             var oldValue = JsonSerializer.Serialize(e);
 
-            e.EmployeeCode = dto.EmployeeCode;
             e.FullName = dto.FullName;
-            e.AccountNumberEncrypted = Encrypt(dto.AccountNumber);
-            e.Salary = dto.Salary;
+            e.AccountNumber = dto.AccountNumber;
             e.Email = dto.Email;
-            e.PAN = dto.PAN;
 
             _repo.Update(e);
 
-            //  Log UPDATE
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -120,10 +100,8 @@ namespace BankingPaymentsAPI.Services
             if (e == null) return false;
 
             var oldValue = JsonSerializer.Serialize(e);
-
             _repo.Delete(e);
 
-            //  Log DELETE
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -143,16 +121,12 @@ namespace BankingPaymentsAPI.Services
             {
                 Id = e.Id,
                 ClientId = e.ClientId,
-                EmployeeCode = e.EmployeeCode,
                 FullName = e.FullName,
-                AccountNumberMasked = Mask(e.AccountNumberEncrypted),
-                Salary = e.Salary,
-                PAN = e.PAN,
+                AccountNumberMasked = Mask(e.AccountNumber),
                 Email = e.Email,
-                IsActive = e.IsActive
+                Balance = e.Balance
             };
 
-        //  Helpers
         private int GetCurrentUserId()
         {
             var userIdClaim = _httpContext.HttpContext?.User?.FindFirst("userId")?.Value;

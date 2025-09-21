@@ -1,14 +1,19 @@
 using BankingPaymentsAPI.Data;
 using BankingPaymentsAPI.Repository;
 using BankingPaymentsAPI.Services;
+using BankingPaymentsAPI.Services.Notification;
+using BankingPaymentsAPI.Services.PaymentProcessing;
+using BankingPaymentsAPI.Services.ReportGeneration;
+
+
 using BankingPaymentsAPI.Services.Storage;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using BankingPaymentsAPI.Services.Notification;
+using System.Text.Json.Serialization;
 
 namespace BankingPaymentsAPI
 {
@@ -18,19 +23,25 @@ namespace BankingPaymentsAPI
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            // -------------------------------
             // DbContext
+            // -------------------------------
             builder.Services.AddDbContext<AppDbContext>(options =>
                 options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+            // -------------------------------
             // Controllers with JSON options (ignore cycles)
+            // -------------------------------
             builder.Services.AddControllers()
                 .AddJsonOptions(opt =>
                 {
-                    opt.JsonSerializerOptions.ReferenceHandler =
-                        System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+                    opt.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+                    opt.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
                 });
 
+            // -------------------------------
             // Swagger
+            // -------------------------------
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
             {
@@ -61,7 +72,9 @@ namespace BankingPaymentsAPI
                 });
             });
 
+            // -------------------------------
             // JWT Authentication
+            // -------------------------------
             var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]);
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
@@ -82,7 +95,9 @@ namespace BankingPaymentsAPI
 
             builder.Services.AddAuthorization();
 
-            // Dependency Injection
+            // -------------------------------
+            // Dependency Injection (Repositories & Services)
+            // -------------------------------
             builder.Services.AddScoped<IUserRepository, UserRepository>();
             builder.Services.AddScoped<IUserService, UserService>();
 
@@ -101,14 +116,15 @@ namespace BankingPaymentsAPI
             builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
             builder.Services.AddScoped<IPaymentService, PaymentService>();
 
+            builder.Services.AddScoped<ISalaryRepository, SalaryRepository>();
+            builder.Services.AddScoped<ISalaryService, SalaryService>();
+
             builder.Services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
             builder.Services.AddScoped<IBeneficiaryService, BeneficiaryService>();
 
             builder.Services.AddScoped<IReportRepository, ReportRepository>();
             builder.Services.AddScoped<IReportService, ReportService>();
-
-            builder.Services.AddScoped<ISalaryRepository, SalaryRepository>();
-            builder.Services.AddScoped<ISalaryService, SalaryService>();
+            builder.Services.AddScoped<IReportGeneratorService, CloudinaryReportGeneratorService>(); // <-- updated
 
             builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
 
@@ -120,11 +136,17 @@ namespace BankingPaymentsAPI
 
             builder.Services.AddScoped<IFileStorageService, CloudinaryFileStorageService>();
 
+            builder.Services.AddScoped<IFundTransferService, FundTransferService>();
+
+            builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
+
             builder.Services.AddHttpContextAccessor();
 
             var app = builder.Build();
 
-            // Swagger only in Development
+            // -------------------------------
+            // Middleware
+            // -------------------------------
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();
@@ -132,6 +154,7 @@ namespace BankingPaymentsAPI
             }
 
             app.UseHttpsRedirection();
+            app.UseStaticFiles();
 
             app.UseAuthentication();
             app.UseAuthorization();

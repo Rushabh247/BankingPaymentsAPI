@@ -2,6 +2,8 @@
 using BankingPaymentsAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Stripe;
+using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Controllers
 {
@@ -18,47 +20,81 @@ namespace BankingPaymentsAPI.Controllers
 
         // Create client
         [HttpPost]
-       // [Authorize(Roles = "Admin,BankUser")]
-        public IActionResult Create([FromBody] ClientRequestDto dto, [FromQuery] int createdByUserId)
+        public async Task<IActionResult> Create([FromBody] ClientRequestDto dto, [FromQuery] int createdByUserId)
         {
-            var client = _service.CreateClient(dto, createdByUserId);
+            var client = await _service.CreateClientAsync(dto, createdByUserId);
             return CreatedAtAction(nameof(GetById), new { id = client.Id }, client);
         }
 
         // Get client by ID
         [HttpGet("{id}")]
-       // [Authorize(Roles = "Admin,BankUser")]
-        public IActionResult GetById(int id)
+        public async Task<IActionResult> GetById(int id)
         {
-            var client = _service.GetClientById(id);
+            var client = await _service.GetClientByIdAsync(id);
             return client == null ? NotFound($"Client with ID {id} not found.") : Ok(client);
         }
 
         // Get all clients
         [HttpGet]
-//        [Authorize(Roles = "Admin,BankUser")]
-        public IActionResult GetAll()
+        public async Task<IActionResult> GetAll()
         {
-            var clients = _service.GetAllClients();
+            var clients = await _service.GetAllClientsAsync();
             return Ok(clients);
         }
 
         // Update client
         [HttpPut("{id}")]
-      //  [Authorize(Roles = "Admin")]
-        public IActionResult Update(int id, [FromBody] ClientUpdateDto dto)
+        public async Task<IActionResult> Update(int id, [FromBody] ClientUpdateDto dto)
         {
-            var updatedClient = _service.UpdateClient(id, dto);
+            var updatedClient = await _service.UpdateClientAsync(id, dto);
             return updatedClient == null ? NotFound($"Client with ID {id} not found.") : Ok(updatedClient);
         }
 
         // Delete client
         [HttpDelete("{id}")]
-       // [Authorize(Roles = "Admin")]
-        public IActionResult Delete(int id)
+        public async Task<IActionResult> Delete(int id)
         {
-            var result = _service.DeleteClient(id);
+            var result = await _service.DeleteClientAsync(id);
             return result ? NoContent() : NotFound($"Client with ID {id} not found.");
+        }
+
+        // Add internal money to client balance
+        [HttpPost("{id}/add-money")]
+        public async Task<IActionResult> AddMoney(int id, [FromQuery] decimal amount)
+        {
+            var success = await _service.AddMoneyAsync(id, amount);
+            return success ? Ok($"Added ₹ {amount} to client {id} balance.")
+                           : BadRequest("Failed to add money. Amount must be positive and client must exist.");
+        }
+
+        // Create Stripe top-up
+        [HttpPost("{id}/stripe-topup")]
+        public async Task<IActionResult> StripeTopUp(int id, [FromQuery] decimal amount)
+        {
+            var paymentIntent = await _service.TopUpViaStripeAsync(id, amount);
+            if (paymentIntent == null)
+                return BadRequest("Failed to create Stripe payment intent.");
+
+            return Ok(paymentIntent);
+        }
+
+        // Confirm Stripe top-up
+        [HttpPost("stripe-topup/confirm")]
+        public async Task<IActionResult> ConfirmStripeTopUp([FromQuery] string paymentIntentId)
+        {
+            var success = await _service.ConfirmStripeTopUpAsync(paymentIntentId);
+            if (!success)
+                return BadRequest("Stripe payment not completed or failed.");
+
+            var client = await _service.GetClientByStripePaymentIntentIdAsync(paymentIntentId);
+            if (client == null)
+                return BadRequest("Client not found after top-up.");
+
+            return Ok(new
+            {
+                Message = "Stripe top-up successful.",
+                CurrentBalance = $"₹{client.Balance}"
+            });
         }
     }
 }

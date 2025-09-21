@@ -1,14 +1,14 @@
 ﻿using BankingPaymentsAPI.Models;
-
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Repository
 {
     public interface IReportRepository
     {
-        ReportRequest Add(ReportRequest request);
-        ReportRequest? GetById(int id);
-        IEnumerable<ReportRequest> GetAll();
-        void Update(ReportRequest request);
+        Task<ReportRequest> AddAsync(ReportRequest request);
+        Task<ReportRequest?> GetByIdAsync(int id);
+        Task<IEnumerable<ReportRequest>> GetAllAsync();
+        Task UpdateAsync(ReportRequest request);
     }
 }

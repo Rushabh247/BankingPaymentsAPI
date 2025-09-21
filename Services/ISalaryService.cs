@@ -8,8 +8,13 @@ namespace BankingPaymentsAPI.Services
         SalaryBatchDto CreateBatch(SalaryBatchRequestDto request, int createdBy);
         SalaryBatchDto? GetBatchById(int id);
         IEnumerable<SalaryBatchDto> GetBatchesByClient(int clientId);
-        SalaryBatchDto? SubmitBatch(int id, int submittedBy); // sets status Submitted
+        SalaryBatchDto? SubmitBatch(int id, int submittedBy);
         bool DeleteBatch(int id);
+
         SalaryPaymentDto? ProcessPayment(int paymentId);
+
+        
+        SalaryPaymentDto? ProcessStripePayment(int paymentId);
+        SalaryPaymentDto? ConfirmStripeSalaryPayment(string paymentIntentId, int approverId);
     }
 }

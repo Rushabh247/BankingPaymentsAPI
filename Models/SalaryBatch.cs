@@ -11,6 +11,7 @@ namespace BankingPaymentsAPI.Models
         public string BatchCode { get; set; }
         public decimal TotalAmount { get; set; }
         public BatchStatus Status { get; set; }
+        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
 
         public ICollection<SalaryPayment> Items { get; set; }
     }

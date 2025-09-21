@@ -7,5 +7,6 @@
         public string AccountNumber { get; set; } // plain; service should encrypt
         public string IFSC { get; set; }
         public string BankName { get; set; }
+        public string Email { get; set; } 
     }
 }

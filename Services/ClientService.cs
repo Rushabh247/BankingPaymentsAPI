@@ -1,8 +1,14 @@
 ﻿using BankingPaymentsAPI.DTOs;
 using BankingPaymentsAPI.Models;
 using BankingPaymentsAPI.Repository;
+using BankingPaymentsAPI.Services.PaymentProcessing;
 using Microsoft.AspNetCore.Http;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
+using Stripe;
 
 namespace BankingPaymentsAPI.Services
 {
@@ -11,18 +17,23 @@ namespace BankingPaymentsAPI.Services
         private readonly IClientRepository _clientRepo;
         private readonly IAuditService _audit;
         private readonly IHttpContextAccessor _httpContext;
+        private readonly IStripePaymentService _stripeService;
 
         public ClientService(
             IClientRepository clientRepo,
             IAuditService audit,
-            IHttpContextAccessor httpContext)
+            IHttpContextAccessor httpContext,
+            IStripePaymentService stripeService)
         {
             _clientRepo = clientRepo;
             _audit = audit;
             _httpContext = httpContext;
+            _stripeService = stripeService;
         }
 
-        public ClientDto CreateClient(ClientRequestDto request, int createdByUserId)
+        #region CRUD Methods
+
+        public async Task<ClientDto> CreateClientAsync(ClientRequestDto request, int createdByUserId)
         {
             var client = new Client
             {
@@ -31,13 +42,13 @@ namespace BankingPaymentsAPI.Services
                 Name = request.Name,
                 ContactEmail = request.ContactEmail,
                 ContactPhone = request.ContactPhone,
+                Balance = 0m,
                 CreatedAt = DateTimeOffset.UtcNow,
                 CreatedBy = createdByUserId
             };
 
-            _clientRepo.Add(client);
+            await _clientRepo.AddAsync(client);
 
-            // Log CREATE
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -52,20 +63,21 @@ namespace BankingPaymentsAPI.Services
             return MapToDto(client);
         }
 
-        public ClientDto? GetClientById(int id)
+        public async Task<ClientDto?> GetClientByIdAsync(int id)
         {
-            var client = _clientRepo.GetById(id);
+            var client = await _clientRepo.GetByIdAsync(id);
             return client == null ? null : MapToDto(client);
         }
 
-        public IEnumerable<ClientDto> GetAllClients()
+        public async Task<IEnumerable<ClientDto>> GetAllClientsAsync()
         {
-            return _clientRepo.GetAll().Select(MapToDto);
+            var clients = await _clientRepo.GetAllAsync();
+            return clients.Select(MapToDto);
         }
 
-        public ClientDto? UpdateClient(int id, ClientUpdateDto request)
+        public async Task<ClientDto?> UpdateClientAsync(int id, ClientUpdateDto request)
         {
-            var client = _clientRepo.GetById(id);
+            var client = await _clientRepo.GetByIdAsync(id);
             if (client == null) return null;
 
             var oldValue = JsonSerializer.Serialize(client);
@@ -74,9 +86,8 @@ namespace BankingPaymentsAPI.Services
             client.ContactEmail = request.ContactEmail;
             client.ContactPhone = request.ContactPhone;
 
-            _clientRepo.Update(client);
+            await _clientRepo.UpdateAsync(client);
 
-            //  Log UPDATE
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -91,16 +102,14 @@ namespace BankingPaymentsAPI.Services
             return MapToDto(client);
         }
 
-        public bool DeleteClient(int id)
+        public async Task<bool> DeleteClientAsync(int id)
         {
-            var client = _clientRepo.GetById(id);
+            var client = await _clientRepo.GetByIdAsync(id);
             if (client == null) return false;
 
             var oldValue = JsonSerializer.Serialize(client);
+            await _clientRepo.DeleteAsync(client);
 
-            _clientRepo.Delete(client);
-
-            //  Log DELETE
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -115,22 +124,75 @@ namespace BankingPaymentsAPI.Services
             return true;
         }
 
+        #endregion
+
+        #region Internal & Stripe Top-up
+
+        public async Task<bool> AddMoneyAsync(int clientId, decimal amount)
+        {
+            if (amount <= 0) return false;
+
+            var client = await _clientRepo.GetByIdAsync(clientId);
+            if (client == null) return false;
+
+            client.Balance += amount;
+            await _clientRepo.UpdateAsync(client);
+
+            return true;
+        }
+
+        public async Task<PaymentIntent> TopUpViaStripeAsync(int clientId, decimal amount)
+        {
+            var client = await _clientRepo.GetByIdAsync(clientId);
+            if (client == null) return null;
+
+            var receipt = $"Client-{clientId}-TopUp-{DateTimeOffset.UtcNow.Ticks}";
+            var paymentIntent = _stripeService.CreatePaymentIntent(amount, "INR", receipt);
+
+            client.StripePaymentIntentId = paymentIntent.Id;
+            await _clientRepo.UpdateAsync(client);
+
+            return paymentIntent;
+        }
+
+        public async Task<bool> ConfirmStripeTopUpAsync(string paymentIntentId)
+        {
+            var client = await _clientRepo.GetByStripeIdAsync(paymentIntentId);
+            if (client == null) return false;
+
+            var intent = _stripeService.GetPaymentIntent(paymentIntentId);
+            if (intent.Status == "succeeded")
+            {
+                client.Balance += intent.Amount / 100m;
+                client.StripePaymentIntentId = paymentIntentId;
+                await _clientRepo.UpdateAsync(client);
+                return true;
+            }
+
+            return false;
+        }
+
+        #endregion
+
+        #region Helpers
+
         private ClientDto MapToDto(Client client)
         {
             return new ClientDto
             {
                 Id = client.Id,
+                BankId = client.BankId,
                 BankName = client.Bank?.BankName ?? "Unknown",
-                Name = client.Name,
                 ClientCode = client.ClientCode,
+                Name = client.Name,
                 ContactEmail = client.ContactEmail,
                 ContactPhone = client.ContactPhone,
                 OnboardingStatus = client.OnboardingStatus.ToString(),
-                IsVerified = client.IsVerified
+                IsVerified = client.IsVerified,
+                Balance = client.Balance
             };
         }
 
-        //  Helpers
         private int GetCurrentUserId()
         {
             var userIdClaim = _httpContext.HttpContext?.User?.FindFirst("userId")?.Value;
@@ -141,5 +203,13 @@ namespace BankingPaymentsAPI.Services
         {
             return _httpContext.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
         }
+
+        public async Task<ClientDto?> GetClientByStripePaymentIntentIdAsync(string paymentIntentId)
+        {
+            var client = await _clientRepo.GetByStripePaymentIntentIdAsync(paymentIntentId);
+            return client == null ? null : MapToDto(client);
+        }
+
+        #endregion
     }
 }

@@ -1,11 +1,15 @@
 ﻿using BankingPaymentsAPI.DTOs;
-using BankingPaymentsAPI.Services.Storage;
 using BankingPaymentsAPI.Enums;
-using BankingPaymentsAPI.Repository;
 using BankingPaymentsAPI.Models;
-using Microsoft.AspNetCore.Http;
-using System.Text.Json;
+using BankingPaymentsAPI.Repository;
 using BankingPaymentsAPI.Services.Notification;
+using BankingPaymentsAPI.Services.Storage;
+using Microsoft.AspNetCore.Http;
+using System;
+using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Services
 {
@@ -17,6 +21,12 @@ namespace BankingPaymentsAPI.Services
         private readonly IHttpContextAccessor _httpContext;
         private readonly IEmailNotificationService _emailNotification;
         private readonly IClientRepository _clientRepo;
+
+        private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
+        {
+            ReferenceHandler = ReferenceHandler.Preserve,
+            WriteIndented = true
+        };
 
         public DocumentService(
             IDocumentRepository repo,
@@ -68,12 +78,11 @@ namespace BankingPaymentsAPI.Services
                 EntityName = nameof(Document),
                 EntityId = doc.Id,
                 OldValueJson = null,
-                NewValueJson = JsonSerializer.Serialize(doc),
+                NewValueJson = JsonSerializer.Serialize(doc, _jsonOptions),
                 IpAddress = GetClientIp()
             });
 
-            // Email client
-            var client = _clientRepo.GetById(clientId);
+            var client = await _clientRepo.GetByIdAsync(clientId);
             if (client != null && !string.IsNullOrEmpty(client.ContactEmail))
             {
                 await _emailNotification.SendEmailAsync(
@@ -139,7 +148,7 @@ namespace BankingPaymentsAPI.Services
             var d = await _repo.GetByIdAsync(id);
             if (d == null) return false;
 
-            var oldValue = JsonSerializer.Serialize(d);
+            var oldValue = JsonSerializer.Serialize(d, _jsonOptions);
 
             await _fileStorage.DeleteFileAsync(d.CloudinaryPublicId);
             await _repo.DeleteAsync(d);
@@ -155,7 +164,7 @@ namespace BankingPaymentsAPI.Services
                 IpAddress = GetClientIp()
             });
 
-            var client = _clientRepo.GetById(d.ClientId);
+            var client = await _clientRepo.GetByIdAsync(d.ClientId);
             if (client != null && !string.IsNullOrEmpty(client.ContactEmail))
             {
                 await _emailNotification.SendEmailAsync(
@@ -170,33 +179,76 @@ namespace BankingPaymentsAPI.Services
             return true;
         }
 
-        // ✅ New: Update Status with email notification
         public async Task<DocumentDto?> UpdateStatusAsync(int documentId, string status)
         {
             var doc = await _repo.GetByIdAsync(documentId);
             if (doc == null) return null;
 
-            var oldValue = JsonSerializer.Serialize(doc);
+            var oldValue = JsonSerializer.Serialize(doc, _jsonOptions);
 
-            if (Enum.TryParse<DocumentStatus>(status, true, out var newStatus))
+            if (!Enum.TryParse<DocumentStatus>(status, true, out var newStatus)) return null;
+
+            doc.Status = newStatus;
+            await _repo.UpdateAsync(doc);
+
+            _audit.Log(new CreateAuditLogDto
             {
-                doc.Status = newStatus;
-                await _repo.UpdateAsync(doc);
+                UserId = GetCurrentUserId(),
+                Action = "UPDATE_DOCUMENT_STATUS",
+                EntityName = nameof(Document),
+                EntityId = doc.Id,
+                OldValueJson = oldValue,
+                NewValueJson = JsonSerializer.Serialize(doc, _jsonOptions),
+                IpAddress = GetClientIp()
+            });
 
-                _audit.Log(new CreateAuditLogDto
+            var client = await _clientRepo.GetByIdAsync(doc.ClientId);
+            if (client != null)
+            {
+                var oldClientValue = JsonSerializer.Serialize(client, _jsonOptions);
+
+                if (doc.Status == DocumentStatus.Verified)
                 {
-                    UserId = GetCurrentUserId(),
-                    Action = "UPDATE_STATUS",
-                    EntityName = nameof(Document),
-                    EntityId = doc.Id,
-                    OldValueJson = oldValue,
-                    NewValueJson = JsonSerializer.Serialize(doc),
-                    IpAddress = GetClientIp()
-                });
+                    client.IsVerified = true;
+                    client.OnboardingStatus = OnboardingStatus.Approved;
+                    client.VerifiedAt = DateTimeOffset.UtcNow;
+                    client.VerifiedBy = GetCurrentUserId();
 
-                // Email client if Verified/Rejected
-                var client = _clientRepo.GetById(doc.ClientId);
-                if (client != null && !string.IsNullOrEmpty(client.ContactEmail))
+                    await _clientRepo.UpdateAsync(client);
+
+                    _audit.Log(new CreateAuditLogDto
+                    {
+                        UserId = GetCurrentUserId(),
+                        Action = "VERIFY_CLIENT",
+                        EntityName = nameof(Client),
+                        EntityId = client.Id,
+                        OldValueJson = oldClientValue,
+                        NewValueJson = JsonSerializer.Serialize(client, _jsonOptions),
+                        IpAddress = GetClientIp()
+                    });
+                }
+                else if (doc.Status == DocumentStatus.Rejected)
+                {
+                    client.IsVerified = false;
+                    client.OnboardingStatus = OnboardingStatus.Rejected;
+                    client.VerifiedAt = null;
+                    client.VerifiedBy = null;
+
+                    await _clientRepo.UpdateAsync(client);
+
+                    _audit.Log(new CreateAuditLogDto
+                    {
+                        UserId = GetCurrentUserId(),
+                        Action = "REJECT_CLIENT",
+                        EntityName = nameof(Client),
+                        EntityId = client.Id,
+                        OldValueJson = oldClientValue,
+                        NewValueJson = JsonSerializer.Serialize(client, _jsonOptions),
+                        IpAddress = GetClientIp()
+                    });
+                }
+
+                if (!string.IsNullOrEmpty(client.ContactEmail))
                 {
                     string subject = $"Document Status Update - {doc.FileName}";
                     string body = $"<p>Dear {client.Name},</p>";
@@ -204,30 +256,30 @@ namespace BankingPaymentsAPI.Services
                     if (doc.Status == DocumentStatus.Verified)
                     {
                         body += $"<p>Your document <strong>{doc.FileName}</strong> has been <span style='color:green;font-weight:bold;'>VERIFIED</span>.</p>";
+                        body += $"<p>Your account is now <b>APPROVED</b> and you can start using our services.</p>";
                     }
                     else if (doc.Status == DocumentStatus.Rejected)
                     {
-                        body += $"<p>Your document <strong>{doc.FileName}</strong> has been <span style='color:red;font-weight:bold;'>REJECTED</span>. Please re-upload valid documents.</p>";
+                        body += $"<p>Your document <strong>{doc.FileName}</strong> has been <span style='color:red;font-weight:bold;'>REJECTED</span>.</p>";
+                        body += $"<p>Your onboarding request is <b>REJECTED</b>. Please re-upload valid documents.</p>";
                     }
 
                     body += "<p>Thank you,<br/>BankingPayments Team</p>";
 
                     await _emailNotification.SendEmailAsync(client.ContactEmail, subject, body);
                 }
-
-                return new DocumentDto
-                {
-                    Id = doc.Id,
-                    ClientId = doc.ClientId,
-                    FileName = doc.FileName,
-                    Url = doc.Url,
-                    Type = doc.Type.ToString(),
-                    UploadedAt = doc.UploadedAt,
-                    Status = doc.Status.ToString()
-                };
             }
 
-            return null;
+            return new DocumentDto
+            {
+                Id = doc.Id,
+                ClientId = doc.ClientId,
+                FileName = doc.FileName,
+                Url = doc.Url,
+                Type = doc.Type.ToString(),
+                UploadedAt = doc.UploadedAt,
+                Status = doc.Status.ToString()
+            };
         }
 
         private int GetCurrentUserId()

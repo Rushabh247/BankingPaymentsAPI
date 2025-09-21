@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Services
 {
@@ -15,47 +16,34 @@ namespace BankingPaymentsAPI.Services
         private readonly IAuditService _audit;
         private readonly IHttpContextAccessor _httpContext;
 
-        public BeneficiaryService(
-            IBeneficiaryRepository repo,
-            IAuditService audit,
-            IHttpContextAccessor httpContext)
+        public BeneficiaryService(IBeneficiaryRepository repo, IAuditService audit, IHttpContextAccessor httpContext)
         {
             _repo = repo;
             _audit = audit;
             _httpContext = httpContext;
         }
 
-        //  Encryption helpers
-        private string Encrypt(string plain) =>
-            Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(plain));
-
-        private string Mask(string encrypted)
+        private string Mask(string accountNumber)
         {
-            try
-            {
-                var bytes = Convert.FromBase64String(encrypted);
-                var plain = System.Text.Encoding.UTF8.GetString(bytes);
-                if (plain.Length <= 4) return "****";
-                return new string('*', plain.Length - 4) + plain[^4..];
-            }
-            catch { return "****"; }
+            if (string.IsNullOrEmpty(accountNumber)) return "****";
+            if (accountNumber.Length <= 4) return "****";
+            return new string('*', accountNumber.Length - 4) + accountNumber[^4..];
         }
 
-        public BeneficiaryDto CreateBeneficiary(BeneficiaryRequestDto dto, int createdBy)
+        public async Task<BeneficiaryDto> CreateBeneficiaryAsync(BeneficiaryRequestDto dto, int createdBy)
         {
             var entity = new Beneficiary
             {
                 ClientId = dto.ClientId,
                 Name = dto.Name,
-                AccountNumberEncrypted = Encrypt(dto.AccountNumber),
+                AccountNumber = dto.AccountNumber,
                 IFSC = dto.IFSC,
-                BankName = dto.BankName,
-                IsActive = true
+                Email = dto.Email, // take from DTO
+                Balance = 0m
             };
 
-            _repo.Add(entity);
+            await _repo.AddAsync(entity);
 
-            //  Log CREATE
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -70,32 +58,32 @@ namespace BankingPaymentsAPI.Services
             return MapToDto(entity);
         }
 
-        public BeneficiaryDto? GetById(int id)
+        public async Task<BeneficiaryDto?> GetByIdAsync(int id)
         {
-            var b = _repo.GetById(id);
+            var b = await _repo.GetByIdAsync(id);
             return b == null ? null : MapToDto(b);
         }
 
-        public IEnumerable<BeneficiaryDto> GetByClient(int clientId)
+        public async Task<IEnumerable<BeneficiaryDto>> GetByClientAsync(int clientId)
         {
-            return _repo.GetByClientId(clientId).Select(MapToDto);
+            var list = await _repo.GetByClientIdAsync(clientId);
+            return list.Select(MapToDto);
         }
 
-        public BeneficiaryDto? Update(int id, BeneficiaryRequestDto dto)
+        public async Task<BeneficiaryDto?> UpdateAsync(int id, BeneficiaryRequestDto dto)
         {
-            var b = _repo.GetById(id);
+            var b = await _repo.GetByIdAsync(id);
             if (b == null) return null;
 
             var oldValue = JsonSerializer.Serialize(b);
 
             b.Name = dto.Name;
-            b.AccountNumberEncrypted = Encrypt(dto.AccountNumber);
+            b.AccountNumber = dto.AccountNumber;
             b.IFSC = dto.IFSC;
-            b.BankName = dto.BankName;
+            b.Email = dto.Email; // take from DTO
 
-            _repo.Update(b);
+            await _repo.UpdateAsync(b);
 
-            //  Log UPDATE
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -110,16 +98,14 @@ namespace BankingPaymentsAPI.Services
             return MapToDto(b);
         }
 
-        public bool Delete(int id)
+        public async Task<bool> DeleteAsync(int id)
         {
-            var b = _repo.GetById(id);
+            var b = await _repo.GetByIdAsync(id);
             if (b == null) return false;
 
             var oldValue = JsonSerializer.Serialize(b);
+            await _repo.DeleteAsync(b);
 
-            _repo.Delete(b);
-
-            //  Log DELETE
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
@@ -140,13 +126,11 @@ namespace BankingPaymentsAPI.Services
                 Id = b.Id,
                 ClientId = b.ClientId,
                 Name = b.Name,
-                AccountNumberMasked = Mask(b.AccountNumberEncrypted),
+                AccountNumberMasked = Mask(b.AccountNumber),
                 IFSC = b.IFSC,
-                BankName = b.BankName,
-                IsActive = b.IsActive
+                Balance = b.Balance
             };
 
-        // Helpers
         private int GetCurrentUserId()
         {
             var userIdClaim = _httpContext.HttpContext?.User?.FindFirst("userId")?.Value;

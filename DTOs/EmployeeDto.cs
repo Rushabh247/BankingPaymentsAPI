@@ -12,5 +12,7 @@
         public decimal Salary { get; set; }
         public string PAN { get; set; }
         public bool IsActive { get; set; }
+
+        public decimal Balance { get; set; }
     }
 }

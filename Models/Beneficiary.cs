@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace BankingPaymentsAPI.Models
 {
@@ -6,14 +6,17 @@ namespace BankingPaymentsAPI.Models
     {
         public int Id { get; set; }
         public int ClientId { get; set; }
-        [JsonIgnore]
         public Client Client { get; set; }
 
         public string Name { get; set; }
-        public string AccountNumberEncrypted { get; set; } // encrypted at rest
+        public string AccountNumber { get; set; }
         public string IFSC { get; set; }
-        public string BankName { get; set; }
-        public bool IsActive { get; set; } = true;
-    }
+        public string Email { get; set; }
 
+       
+        public decimal Balance { get; set; } = 0m;
+
+        [Timestamp]
+        public byte[] RowVersion { get; set; }
+    }
 }

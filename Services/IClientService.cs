@@ -1,13 +1,18 @@
 ﻿using BankingPaymentsAPI.DTOs;
+using Stripe;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
-namespace BankingPaymentsAPI.Services
+public interface IClientService
 {
-    public interface IClientService
-    {
-        ClientDto CreateClient(ClientRequestDto request, int createdByUserId);
-        ClientDto? GetClientById(int id);
-        IEnumerable<ClientDto> GetAllClients();
-        ClientDto? UpdateClient(int id, ClientUpdateDto request);
-        bool DeleteClient(int id);
-    }
+    Task<ClientDto> CreateClientAsync(ClientRequestDto request, int createdByUserId);
+    Task<ClientDto?> GetClientByIdAsync(int id);
+    Task<IEnumerable<ClientDto>> GetAllClientsAsync();
+    Task<ClientDto?> UpdateClientAsync(int id, ClientUpdateDto request);
+    Task<bool> DeleteClientAsync(int id);
+
+    Task<bool> AddMoneyAsync(int clientId, decimal amount);
+    Task<PaymentIntent> TopUpViaStripeAsync(int clientId, decimal amount);
+    Task<bool> ConfirmStripeTopUpAsync(string paymentIntentId);
+    Task<ClientDto?> GetClientByStripePaymentIntentIdAsync(string paymentIntentId);
 }

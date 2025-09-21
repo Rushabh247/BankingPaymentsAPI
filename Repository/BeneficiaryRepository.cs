@@ -1,58 +1,65 @@
 ﻿using BankingPaymentsAPI.Data;
 using BankingPaymentsAPI.Models;
-
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Repository
 {
     public class BeneficiaryRepository : IBeneficiaryRepository
     {
         private readonly AppDbContext _context;
-        public BeneficiaryRepository(AppDbContext context) => _context = context;
 
-        public Beneficiary Add(Beneficiary beneficiary)
+        public BeneficiaryRepository(AppDbContext context)
         {
-            _context.Beneficiaries.Add(beneficiary);
-            _context.SaveChanges();
+            _context = context;
+        }
+
+        public async Task<Beneficiary> AddAsync(Beneficiary beneficiary)
+        {
+            await _context.Beneficiaries.AddAsync(beneficiary);
+            await _context.SaveChangesAsync();
             return beneficiary;
         }
 
-        public Beneficiary? GetById(int id)
+        public async Task<Beneficiary?> GetByIdAsync(int id)
         {
-            return _context.Beneficiaries
+            return await _context.Beneficiaries
                 .AsNoTracking()
                 .Include(b => b.Client)
-                .FirstOrDefault(b => b.Id == id);
+                .FirstOrDefaultAsync(b => b.Id == id);
         }
 
-        public IEnumerable<Beneficiary> GetByClientId(int clientId)
+        public async Task<IEnumerable<Beneficiary>> GetByClientIdAsync(int clientId)
         {
-            return _context.Beneficiaries
+            return await _context.Beneficiaries
                 .AsNoTracking()
                 .Where(b => b.ClientId == clientId)
-                .ToList();
+                .ToListAsync();
         }
 
-        public IEnumerable<Beneficiary> GetAll()
+        public async Task<IEnumerable<Beneficiary>> GetAllAsync()
         {
-            return _context.Beneficiaries
+            return await _context.Beneficiaries
                 .AsNoTracking()
                 .Include(b => b.Client)
-                .ToList();
+                .ToListAsync();
         }
 
-        public void Update(Beneficiary beneficiary)
+        public async Task UpdateAsync(Beneficiary beneficiary)
         {
-            _context.Beneficiaries.Update(beneficiary);
-            _context.SaveChanges();
+            if (!_context.Beneficiaries.Local.Any(b => b.Id == beneficiary.Id))
+            {
+                _context.Beneficiaries.Update(beneficiary);
+            }
+            await _context.SaveChangesAsync();
         }
 
-        public void Delete(Beneficiary beneficiary)
+        public async Task DeleteAsync(Beneficiary beneficiary)
         {
             _context.Beneficiaries.Remove(beneficiary);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
         }
     }
 }
