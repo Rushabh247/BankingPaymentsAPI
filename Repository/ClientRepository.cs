@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 
 namespace BankingPaymentsAPI.Repository
 {
+ 
+
     public class ClientRepository : IClientRepository
     {
         private readonly AppDbContext _context;
@@ -43,12 +45,9 @@ namespace BankingPaymentsAPI.Repository
 
         public async Task UpdateAsync(Client client)
         {
-            // Attach if not tracked
             var tracked = _context.Clients.Local.FirstOrDefault(c => c.Id == client.Id);
             if (tracked == null)
-            {
                 _context.Clients.Attach(client);
-            }
 
             _context.Entry(client).State = EntityState.Modified;
             await _context.SaveChangesAsync();

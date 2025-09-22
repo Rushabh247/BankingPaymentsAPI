@@ -2,6 +2,7 @@
 using BankingPaymentsAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Linq;
 
 namespace BankingPaymentsAPI.Controllers
 {
@@ -16,9 +17,9 @@ namespace BankingPaymentsAPI.Controllers
             _service = service;
         }
 
-        // ✅ Create new Employee
+
         [HttpPost]
-       // [Authorize(Roles = "Admin,BankUser")]
+         [Authorize(Roles = "SuperAdmin,ClientUser")]
         public IActionResult Create([FromBody] EmployeeRequestDto dto)
         {
             // Assuming current user ID comes from token/claims, 
@@ -27,29 +28,29 @@ namespace BankingPaymentsAPI.Controllers
             return CreatedAtAction(nameof(GetById), new { id = createdEmployee.Id }, createdEmployee);
         }
 
-        // ✅ Get Employee by Id
+     
         [HttpGet("{id}")]
-      //  [Authorize(Roles = "Admin,BankUser")]
+        [Authorize(Roles = "SuperAdmin,ClientUser")]
         public IActionResult GetById(int id)
         {
             var employee = _service.GetById(id);
             return employee == null ? NotFound($"Employee with ID {id} not found.") : Ok(employee);
         }
 
-        // ✅ Get Employees by ClientId
+       
         [HttpGet("by-client/{clientId}")]
-      //  [Authorize(Roles = "Admin,BankUser")]
+         [Authorize(Roles = "SuperAdmin,BankUser")]
         public IActionResult GetByClient(int clientId)
         {
             var employees = _service.GetByClient(clientId);
-            return employees == null || !employees.Any()
+            return !employees.Any()
                 ? NotFound($"No employees found for Client ID {clientId}.")
                 : Ok(employees);
         }
 
-        // ✅ Update Employee
+       
         [HttpPut("{id}")]
-      //  [Authorize(Roles = "Admin")]
+         [Authorize(Roles = "SuperAdmin,ClientUser")]
         public IActionResult Update(int id, [FromBody] EmployeeRequestDto dto)
         {
             var updatedEmployee = _service.Update(id, dto);
@@ -58,9 +59,8 @@ namespace BankingPaymentsAPI.Controllers
                 : Ok(updatedEmployee);
         }
 
-        // ✅ Delete Employee (hard delete as per service)
         [HttpDelete("{id}")]
-       // [Authorize(Roles = "Admin")]
+         [Authorize(Roles = "SuperAdmin,ClientUser")]
         public IActionResult Delete(int id)
         {
             var result = _service.Delete(id);

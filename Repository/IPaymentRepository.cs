@@ -7,7 +7,7 @@ namespace BankingPaymentsAPI.Repository
         Payment Add(Payment payment);
         Payment? GetById(int id);
         IEnumerable<Payment> GetAll();
-        void Update(Payment payment);
+        Payment Update(Payment payment);
         void Delete(Payment payment);
 
         Payment? GetByStripeId(string paymentIntentId);

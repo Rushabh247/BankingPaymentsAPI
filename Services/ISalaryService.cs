@@ -5,16 +5,23 @@ namespace BankingPaymentsAPI.Services
 {
     public interface ISalaryService
     {
-        SalaryBatchDto CreateBatch(SalaryBatchRequestDto request, int createdBy);
+        // Batch
+        SalaryBatchDto CreateBatch(SalaryBatchRequestDto request, int createdByUserId);
+        SalaryBatchDto? ProcessBatch(int batchId, int approverId, string remarks);
+
+        // Single retry
+        SalaryPaymentDto? RetryFailedPayment(int paymentId, int approverId);
+
+        // Stripe
+        SalaryPaymentDto CreateStripePayment(int employeeId, decimal amount, int batchId, int createdByUserId);
+        SalaryPaymentDto? ConfirmStripeSalaryPayment(string paymentIntentId, int approverId);
+
+        // Queries
         SalaryBatchDto? GetBatchById(int id);
         IEnumerable<SalaryBatchDto> GetBatchesByClient(int clientId);
-        SalaryBatchDto? SubmitBatch(int id, int submittedBy);
+        SalaryPaymentDto? GetPaymentById(int id);
+
+        // Delete
         bool DeleteBatch(int id);
-
-        SalaryPaymentDto? ProcessPayment(int paymentId);
-
-        
-        SalaryPaymentDto? ProcessStripePayment(int paymentId);
-        SalaryPaymentDto? ConfirmStripeSalaryPayment(string paymentIntentId, int approverId);
     }
 }

@@ -2,7 +2,6 @@
 using BankingPaymentsAPI.Models;
 using BankingPaymentsAPI.Repository;
 using Microsoft.AspNetCore.Http;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -29,6 +28,7 @@ namespace BankingPaymentsAPI.Services
             return new string('*', accountNumber.Length - 4) + accountNumber[^4..];
         }
 
+        // ✅ Create Employee
         public EmployeeDto CreateEmployee(EmployeeRequestDto dto, int createdBy)
         {
             var e = new Employee
@@ -37,6 +37,7 @@ namespace BankingPaymentsAPI.Services
                 FullName = dto.FullName,
                 AccountNumber = dto.AccountNumber,
                 Email = dto.Email,
+                Salary = dto.Salary,
                 Balance = 0m
             };
 
@@ -56,17 +57,22 @@ namespace BankingPaymentsAPI.Services
             return MapToDto(e);
         }
 
+        // ✅ Get Employee by ID
         public EmployeeDto? GetById(int id)
         {
-            var e = _repo.GetById(id);
-            return e == null ? null : MapToDto(e);
+            var employee = _repo.GetById(id);
+            if (employee == null) return null;
+            return MapToDto(employee);
         }
 
+        // ✅ Get Employees by Client ID
         public IEnumerable<EmployeeDto> GetByClient(int clientId)
         {
-            return _repo.GetByClientId(clientId).Select(MapToDto);
+            var employees = _repo.GetByClientId(clientId);
+            return employees.Select(MapToDto);
         }
 
+        // ✅ Update Employee
         public EmployeeDto? Update(int id, EmployeeRequestDto dto)
         {
             var e = _repo.GetById(id);
@@ -77,6 +83,7 @@ namespace BankingPaymentsAPI.Services
             e.FullName = dto.FullName;
             e.AccountNumber = dto.AccountNumber;
             e.Email = dto.Email;
+            e.Salary = dto.Salary;
 
             _repo.Update(e);
 
@@ -94,6 +101,7 @@ namespace BankingPaymentsAPI.Services
             return MapToDto(e);
         }
 
+        // ✅ Delete Employee
         public bool Delete(int id)
         {
             var e = _repo.GetById(id);
@@ -116,14 +124,16 @@ namespace BankingPaymentsAPI.Services
             return true;
         }
 
+        // Map Employee entity to DTO (no cycles)
         private EmployeeDto MapToDto(Employee e) =>
             new EmployeeDto
             {
                 Id = e.Id,
                 ClientId = e.ClientId,
                 FullName = e.FullName,
-                AccountNumberMasked = Mask(e.AccountNumber),
                 Email = e.Email,
+                AccountNumberMasked = Mask(e.AccountNumber),
+                Salary = e.Salary,
                 Balance = e.Balance
             };
 

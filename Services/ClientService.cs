@@ -3,15 +3,17 @@ using BankingPaymentsAPI.Models;
 using BankingPaymentsAPI.Repository;
 using BankingPaymentsAPI.Services.PaymentProcessing;
 using Microsoft.AspNetCore.Http;
+using Stripe;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Stripe;
 
 namespace BankingPaymentsAPI.Services
 {
+
+
     public class ClientService : IClientService
     {
         private readonly IClientRepository _clientRepo;
@@ -42,6 +44,7 @@ namespace BankingPaymentsAPI.Services
                 Name = request.Name,
                 ContactEmail = request.ContactEmail,
                 ContactPhone = request.ContactPhone,
+                AccountNumber = request.AccountNumber, // store actual
                 Balance = 0m,
                 CreatedAt = DateTimeOffset.UtcNow,
                 CreatedBy = createdByUserId
@@ -85,6 +88,7 @@ namespace BankingPaymentsAPI.Services
             client.Name = request.Name;
             client.ContactEmail = request.ContactEmail;
             client.ContactPhone = request.ContactPhone;
+            client.AccountNumber = request.AccountNumber;
 
             await _clientRepo.UpdateAsync(client);
 
@@ -189,8 +193,16 @@ namespace BankingPaymentsAPI.Services
                 ContactPhone = client.ContactPhone,
                 OnboardingStatus = client.OnboardingStatus.ToString(),
                 IsVerified = client.IsVerified,
-                Balance = client.Balance
+                Balance = client.Balance,
+                AccountNumberMasked = Mask(client.AccountNumber)
             };
+        }
+
+        private string Mask(string accountNumber)
+        {
+            if (string.IsNullOrEmpty(accountNumber)) return "****";
+            if (accountNumber.Length <= 4) return "****";
+            return new string('*', accountNumber.Length - 4) + accountNumber[^4..];
         }
 
         private int GetCurrentUserId()

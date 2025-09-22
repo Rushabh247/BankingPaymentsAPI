@@ -18,48 +18,51 @@ namespace BankingPaymentsAPI.Controllers
             _service = service;
         }
 
-        // Create client
+      
         [HttpPost]
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> Create([FromBody] ClientRequestDto dto, [FromQuery] int createdByUserId)
         {
             var client = await _service.CreateClientAsync(dto, createdByUserId);
             return CreatedAtAction(nameof(GetById), new { id = client.Id }, client);
         }
 
-        // Get client by ID
+        
         [HttpGet("{id}")]
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> GetById(int id)
         {
             var client = await _service.GetClientByIdAsync(id);
             return client == null ? NotFound($"Client with ID {id} not found.") : Ok(client);
         }
 
-        // Get all clients
         [HttpGet]
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> GetAll()
         {
             var clients = await _service.GetAllClientsAsync();
             return Ok(clients);
         }
 
-        // Update client
         [HttpPut("{id}")]
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> Update(int id, [FromBody] ClientUpdateDto dto)
         {
             var updatedClient = await _service.UpdateClientAsync(id, dto);
             return updatedClient == null ? NotFound($"Client with ID {id} not found.") : Ok(updatedClient);
         }
 
-        // Delete client
         [HttpDelete("{id}")]
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> Delete(int id)
         {
             var result = await _service.DeleteClientAsync(id);
             return result ? NoContent() : NotFound($"Client with ID {id} not found.");
         }
 
-        // Add internal money to client balance
+      
         [HttpPost("{id}/add-money")]
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> AddMoney(int id, [FromQuery] decimal amount)
         {
             var success = await _service.AddMoneyAsync(id, amount);
@@ -67,8 +70,9 @@ namespace BankingPaymentsAPI.Controllers
                            : BadRequest("Failed to add money. Amount must be positive and client must exist.");
         }
 
-        // Create Stripe top-up
+        
         [HttpPost("{id}/stripe-topup")]
+        [Authorize(Roles = "SuperAdmin,BankUser,ClientUser")]
         public async Task<IActionResult> StripeTopUp(int id, [FromQuery] decimal amount)
         {
             var paymentIntent = await _service.TopUpViaStripeAsync(id, amount);
@@ -78,8 +82,8 @@ namespace BankingPaymentsAPI.Controllers
             return Ok(paymentIntent);
         }
 
-        // Confirm Stripe top-up
         [HttpPost("stripe-topup/confirm")]
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> ConfirmStripeTopUp([FromQuery] string paymentIntentId)
         {
             var success = await _service.ConfirmStripeTopUpAsync(paymentIntentId);
@@ -93,7 +97,8 @@ namespace BankingPaymentsAPI.Controllers
             return Ok(new
             {
                 Message = "Stripe top-up successful.",
-                CurrentBalance = $"₹{client.Balance}"
+                CurrentBalance = $"₹{client.Balance}",
+                AccountNumber = client.AccountNumberMasked 
             });
         }
     }

@@ -11,8 +11,11 @@ namespace BankingPaymentsAPI.Repository
         void UpdateBatch(SalaryBatch batch);
         void DeleteBatch(SalaryBatch batch);
 
-        
+        SalaryPayment? GetPaymentByStripeId(string stripeIntentId);
         SalaryPayment? GetPaymentById(int id);
         void UpdatePayment(SalaryPayment payment);
+
+        // Add this to save new payments individually
+        SalaryPayment AddPayment(SalaryPayment payment);
     }
 }

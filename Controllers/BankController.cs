@@ -18,7 +18,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Create a new bank
         [HttpPost]
-       // [Authorize(Roles = "Admin")] // only Admin should create banks
+       [Authorize(Roles = "SuperAdmin")] // only Admin should create banks
         public IActionResult Create([FromBody] BankRequestDto dto)
         {
             if (!ModelState.IsValid)
@@ -30,7 +30,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Get bank by Id
         [HttpGet("{id}")]
-      //  [Authorize(Roles = "Admin,BankUser")]
+        [Authorize(Roles = "SuperAdmin")]
         public IActionResult GetById(int id)
         {
             var bank = _service.GetBankById(id);
@@ -39,7 +39,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Get all banks
         [HttpGet]
-      //  [Authorize(Roles = "Admin,BankUser")]
+       [Authorize(Roles = "SuperAdmin")]
         public IActionResult GetAll()
         {
             var banks = _service.GetAllBanks();
@@ -48,7 +48,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Update a bank
         [HttpPut("{id}")]
-      //  [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "SuperAdmin")]
         public IActionResult Update(int id, [FromBody] BankUpdateDto dto)
         {
             if (!ModelState.IsValid)
@@ -60,7 +60,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Delete a bank
         [HttpDelete("{id}")]
-       // [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "SuperAdmin")]
         public IActionResult Delete(int id)
         {
             var result = _service.DeleteBank(id);

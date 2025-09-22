@@ -17,10 +17,8 @@ namespace BankingPaymentsAPI.Services
         private readonly IAuditService _audit;
         private readonly IHttpContextAccessor _httpContext;
         private readonly IReportGeneratorService _reportGenerator;
-
         private readonly ITransactionService _transactionService;
         private readonly ISalaryRepository _salaryRepo;
-        
 
         public ReportService(
             IReportRepository repo,
@@ -28,7 +26,7 @@ namespace BankingPaymentsAPI.Services
             IHttpContextAccessor httpContext,
             IReportGeneratorService reportGenerator,
             ITransactionService transactionService,
-            ISalaryRepository salaryRepo)   
+            ISalaryRepository salaryRepo)
         {
             _repo = repo;
             _audit = audit;
@@ -37,7 +35,6 @@ namespace BankingPaymentsAPI.Services
             _transactionService = transactionService;
             _salaryRepo = salaryRepo;
         }
-
 
         public async Task<ReportRequestDto> RequestReportAsync(ReportRequestCreateDto dto, int requestedBy)
         {
@@ -77,16 +74,17 @@ namespace BankingPaymentsAPI.Services
 
             return reports.Where(r =>
             {
-                var parameters = JsonSerializer.Deserialize<Dictionary<string, string>>(r.ParametersJson);
-                bool clientMatch = !clientId.HasValue || (parameters.ContainsKey("clientId") && parameters["clientId"] == clientId.Value.ToString());
-                bool dateMatch = true;
+                var parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(r.ParametersJson);
+                bool clientMatch = !clientId.HasValue ||
+                    (parameters.ContainsKey("clientId") && parameters["clientId"]?.ToString() == clientId.Value.ToString());
 
+                bool dateMatch = true;
                 if (fromDate.HasValue && toDate.HasValue)
                 {
                     if (parameters.ContainsKey("fromDate") && parameters.ContainsKey("toDate"))
                     {
-                        var reportFrom = DateTimeOffset.Parse(parameters["fromDate"]);
-                        var reportTo = DateTimeOffset.Parse(parameters["toDate"]);
+                        var reportFrom = DateTimeOffset.Parse(parameters["fromDate"].ToString());
+                        var reportTo = DateTimeOffset.Parse(parameters["toDate"].ToString());
                         dateMatch = reportFrom >= fromDate && reportTo <= toDate;
                     }
                 }
@@ -94,6 +92,7 @@ namespace BankingPaymentsAPI.Services
                 return clientMatch && dateMatch;
             }).Select(MapToDto);
         }
+
         public async Task<object> GetReportDataByTypeAsync(string reportType, int? clientId = null)
         {
             if (Enum.TryParse<ReportType>(reportType, true, out var type))
@@ -106,7 +105,7 @@ namespace BankingPaymentsAPI.Services
                     case ReportType.SalaryDisbursementReport:
                         if (clientId.HasValue)
                             return _salaryRepo.GetBatchesByClient(clientId.Value);
-                        return _salaryRepo.GetBatchesByClient(0); 
+                        return _salaryRepo.GetBatchesByClient(0);
 
                     case ReportType.AuditLogReport:
                         return _audit.GetAll();
@@ -117,8 +116,6 @@ namespace BankingPaymentsAPI.Services
             }
             throw new ArgumentException("Invalid report type");
         }
-
-
 
         public async Task<ReportRequestDto?> GetByIdAsync(int id)
         {

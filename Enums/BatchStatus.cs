@@ -7,6 +7,7 @@
         Submitted,
         Approved,
         Processed,
+        PartiallyProcessed,
         Failed
     }
 }

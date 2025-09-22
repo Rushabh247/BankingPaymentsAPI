@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 
 public interface IClientService
 {
+
     Task<ClientDto> CreateClientAsync(ClientRequestDto request, int createdByUserId);
     Task<ClientDto?> GetClientByIdAsync(int id);
     Task<IEnumerable<ClientDto>> GetAllClientsAsync();

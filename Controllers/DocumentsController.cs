@@ -20,7 +20,7 @@ namespace BankingPaymentsAPI.Controllers
 
        
         [HttpPost("{clientId}/upload")]
-      //  [Authorize] // require authentication
+        [Authorize(Roles = "SuperAdmin,ClientUser")]
         public async Task<IActionResult> Upload(
             int clientId,
             IFormFile file,
@@ -36,7 +36,7 @@ namespace BankingPaymentsAPI.Controllers
 
      
         [HttpGet("{id}")]
-     //   [Authorize]
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> GetById(int id)
         {
             var doc = await _service.GetByIdAsync(id);
@@ -45,7 +45,7 @@ namespace BankingPaymentsAPI.Controllers
 
        
         [HttpGet("client/{clientId}")]
-     //   [Authorize]
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> GetByClient(int clientId)
         {
             var docs = await _service.GetByClientAsync(clientId);
@@ -53,6 +53,7 @@ namespace BankingPaymentsAPI.Controllers
         }
 
         [HttpPut("status")]
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> UpdateStatus([FromBody] UpdateDocumentStatusDto dto)
         {
             var updatedDoc = await _service.UpdateStatusAsync(dto.DocumentId, dto.Status);
@@ -61,7 +62,7 @@ namespace BankingPaymentsAPI.Controllers
 
 
         [HttpDelete("{id}")]
-       // [Authorize(Roles = "ADMIN")] // only admins can delete
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> Delete(int id)
         {
             var success = await _service.DeleteAsync(id);

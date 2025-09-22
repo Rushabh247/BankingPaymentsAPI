@@ -17,10 +17,10 @@ namespace BankingPaymentsAPI.Controllers
         }
 
  
-        /// Create a new audit log entry
+      
       
         [HttpPost]
-       // [Authorize(Roles = "Admin,BankUser")]
+        [Authorize(Roles = "SuperAdmin")]
         public IActionResult Create([FromBody] CreateAuditLogDto dto)
         {
             var createdLog = _service.Log(dto);
@@ -31,7 +31,7 @@ namespace BankingPaymentsAPI.Controllers
         /// Get all audit logs
   
         [HttpGet]
-      //  [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "SuperAdmin")]
         public IActionResult GetAll()
         {
             var logs = _service.GetAll();
@@ -42,7 +42,7 @@ namespace BankingPaymentsAPI.Controllers
         /// Get all logs for a specific entity
    
         [HttpGet("entity/{entityName}/{entityId}")]
-       // [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "SuperAdmin")]
         public IActionResult GetByEntity(string entityName, int entityId)
         {
             var logs = _service.GetByEntity(entityName, entityId);
@@ -53,7 +53,7 @@ namespace BankingPaymentsAPI.Controllers
         /// Get all logs for a specific user
   
         [HttpGet("user/{userId}")]
-       // [Authorize(Roles = "Admin")]
+       [Authorize(Roles = "SuperAdmin")]
         public IActionResult GetByUser(int userId)
         {
             var logs = _service.GetByUser(userId);

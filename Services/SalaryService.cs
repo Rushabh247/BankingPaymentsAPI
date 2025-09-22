@@ -2,163 +2,309 @@
 using BankingPaymentsAPI.Enums;
 using BankingPaymentsAPI.Models;
 using BankingPaymentsAPI.Repository;
+using BankingPaymentsAPI.Services.PaymentProcessing;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace BankingPaymentsAPI.Services
 {
     public class SalaryService : ISalaryService
     {
         private readonly ISalaryRepository _salaryRepo;
-        private readonly IPaymentService _paymentService;
+        private readonly IFundTransferService _fundTransfer;
+        private readonly IStripePaymentService _stripe;
+        private readonly ITransactionService _txnService;
 
-        public SalaryService(ISalaryRepository salaryRepo, IPaymentService paymentService)
+        public SalaryService(
+            ISalaryRepository salaryRepo,
+            IFundTransferService fundTransfer,
+            IStripePaymentService stripe,
+            ITransactionService txnService)
         {
             _salaryRepo = salaryRepo;
-            _paymentService = paymentService;
+            _fundTransfer = fundTransfer;
+            _stripe = stripe;
+            _txnService = txnService;
         }
 
-        public SalaryBatchDto CreateBatch(SalaryBatchRequestDto request, int createdBy)
+        #region Batch
+
+        public SalaryBatchDto CreateBatch(SalaryBatchRequestDto request, int createdByUserId)
         {
+            // Step 1: Create batch with empty items
             var batch = new SalaryBatch
             {
                 ClientId = request.ClientId,
                 BatchCode = request.BatchCode,
                 TotalAmount = request.Items.Sum(i => i.Amount),
                 Status = BatchStatus.Created,
-                Items = request.Items.Select(i => new SalaryPayment
+                Items = new List<SalaryPayment>()
+            };
+
+            batch = _salaryRepo.AddBatch(batch); // Save batch first to generate Id
+
+            // Step 2: Add payments now that batch Id exists
+            foreach (var i in request.Items)
+            {
+                var payment = new SalaryPayment
                 {
                     EmployeeId = i.EmployeeId,
                     Amount = i.Amount,
-                    Status = PaymentStatus.Draft,
-                    Method = request.Method
-                }).ToList()
-            };
+                    Status = PaymentStatus.PendingApproval,
+                    Method = request.Method,
+                    TxnRef = request.Method == PaymentMethod.Internal ? $"TEMP-{Guid.NewGuid()}" : null,
+                    SalaryBatchId = batch.Id
+                };
 
-            _salaryRepo.AddBatch(batch);
-
-            return MapBatchToDto(batch);
-        }
-
-        public SalaryBatchDto? GetBatchById(int id)
-        {
-            var batch = _salaryRepo.GetBatchById(id);
-            if (batch == null) return null;
-
-            return MapBatchToDto(batch);
-        }
-
-        public IEnumerable<SalaryBatchDto> GetBatchesByClient(int clientId)
-        {
-            var batches = _salaryRepo.GetBatchesByClient(clientId);
-            return batches.Select(MapBatchToDto);
-        }
-
-        public SalaryBatchDto? SubmitBatch(int id, int submittedBy)
-        {
-            var batch = _salaryRepo.GetBatchById(id);
-            if (batch == null) return null;
-
-            batch.Status = BatchStatus.Submitted;
-            foreach (var item in batch.Items)
-            {
-                item.Status = PaymentStatus.PendingApproval;
+                _salaryRepo.UpdatePayment(payment); // Save payment individually
             }
+
+            // Reload batch with items for DTO
+            batch = _salaryRepo.GetBatchById(batch.Id);
+            return MapBatchToDto(batch);
+        }
+
+        public SalaryBatchDto? ProcessBatch(int batchId, int approverId, string remarks)
+        {
+            var batch = _salaryRepo.GetBatchById(batchId);
+            if (batch == null) return null;
+
+            foreach (var payment in batch.Items.ToList()) // ToList avoids modification issues
+            {
+                if (payment.Status == PaymentStatus.Processed) continue;
+
+                try
+                {
+                    if (payment.Method == PaymentMethod.Internal)
+                    {
+                        _fundTransfer.TransferFunds(
+                            batch.ClientId, AccountHolderType.Client,
+                            payment.EmployeeId, AccountHolderType.Employee,
+                            payment.Amount
+                        );
+
+                        payment.Status = PaymentStatus.Processed;
+                        payment.TxnRef = $"TXN-{Guid.NewGuid()}";
+
+                        _txnService.RecordTransaction(new TransactionDto
+                        {
+                            PaymentId = null,
+                            SalaryPaymentId = payment.Id,
+                            Amount = payment.Amount,
+                            DebitAccountMasked = MaskAccount(batch.Client.Beneficiaries.FirstOrDefault()?.AccountNumber ?? ""),
+                            CreditAccountMasked = MaskAccount(payment.Employee.AccountNumber),
+                            TransactionDate = DateTimeOffset.UtcNow,
+                            Status = "SUCCESS",
+                            ExternalTxnRef = payment.TxnRef
+                        });
+                    }
+                    else if (payment.Method == PaymentMethod.Stripe)
+                    {
+                        var intent = _stripe.CreatePaymentIntent(payment.Amount, "INR", $"salary_{payment.Id}");
+                        payment.StripePaymentIntentId = intent.Id;
+                        payment.Status = PaymentStatus.PendingApproval;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    payment.Status = PaymentStatus.Failed;
+                    payment.FailureReason = ex.Message;
+                }
+
+                _salaryRepo.UpdatePayment(payment);
+            }
+
+            // ✅ Update batch status correctly with BatchStatus enum
+            batch.Status = batch.Items.All(p => p.Status == PaymentStatus.Processed) ? BatchStatus.Processed :
+                           batch.Items.All(p => p.Status == PaymentStatus.Failed) ? BatchStatus.Failed :
+                           BatchStatus.PartiallyProcessed;
 
             _salaryRepo.UpdateBatch(batch);
             return MapBatchToDto(batch);
         }
 
-        public bool DeleteBatch(int id)
-        {
-            var batch = _salaryRepo.GetBatchById(id);
-            if (batch == null) return false;
-
-            _salaryRepo.DeleteBatch(batch);
-            return true;
-        }
-
-        public SalaryPaymentDto? ProcessPayment(int paymentId)
+        public SalaryPaymentDto? RetryFailedPayment(int paymentId, int approverId)
         {
             var payment = _salaryRepo.GetPaymentById(paymentId);
-            if (payment == null) return null;
+            if (payment == null || payment.Status != PaymentStatus.Failed) return null;
 
-            // Example: internal transfer
-            payment.Status = PaymentStatus.Processed;
-            _salaryRepo.UpdatePayment(payment);
+            try
+            {
+                if (payment.Method == PaymentMethod.Internal)
+                {
+                    _fundTransfer.TransferFunds(
+                        payment.SalaryBatch.ClientId, AccountHolderType.Client,
+                        payment.EmployeeId, AccountHolderType.Employee, payment.Amount
+                    );
+
+                    payment.Status = PaymentStatus.Processed;
+                    payment.TxnRef = $"RETRY-{Guid.NewGuid()}";
+                    payment.FailureReason = null;
+
+                    _txnService.RecordTransaction(new TransactionDto
+                    {
+                        PaymentId = null,
+                        SalaryPaymentId = payment.Id,
+                        Amount = payment.Amount,
+                        DebitAccountMasked = MaskAccount(payment.SalaryBatch.Client.Beneficiaries.FirstOrDefault()?.AccountNumber ?? ""),
+                        CreditAccountMasked = MaskAccount(payment.Employee.AccountNumber),
+                        TransactionDate = DateTimeOffset.UtcNow,
+                        Status = "SUCCESS",
+                        ExternalTxnRef = payment.TxnRef
+                    });
+                }
+                else if (payment.Method == PaymentMethod.Stripe)
+                {
+                    var intent = _stripe.CreatePaymentIntent(payment.Amount, "INR", $"salary_{payment.Id}");
+                    payment.StripePaymentIntentId = intent.Id;
+                    payment.Status = PaymentStatus.PendingApproval;
+                    payment.FailureReason = null;
+                }
+
+                _salaryRepo.UpdatePayment(payment);
+            }
+            catch (Exception ex)
+            {
+                payment.Status = PaymentStatus.Failed;
+                payment.FailureReason = ex.Message;
+                _salaryRepo.UpdatePayment(payment);
+            }
 
             return MapPaymentToDto(payment);
         }
 
-        public SalaryPaymentDto? ProcessStripePayment(int paymentId)
+        #endregion
+
+        #region Stripe
+
+        public SalaryPaymentDto CreateStripePayment(int employeeId, decimal amount, int batchId, int createdByUserId)
         {
-            var payment = _salaryRepo.GetPaymentById(paymentId);
-            if (payment == null) return null;
+            var batch = _salaryRepo.GetBatchById(batchId) ?? throw new Exception("Batch not found");
 
-            // create Stripe payment intent here
-            payment.Method = PaymentMethod.Stripe;
-            payment.Status = PaymentStatus.PendingApproval;
+            var payment = new SalaryPayment
+            {
+                EmployeeId = employeeId,
+                Amount = amount,
+                Method = PaymentMethod.Stripe,
+                Status = PaymentStatus.PendingApproval,
+                SalaryBatchId = batchId
+            };
 
-            _salaryRepo.UpdatePayment(payment);
+            var intent = _stripe.CreatePaymentIntent(amount, "INR", $"salary_{payment.Id}");
+            payment.StripePaymentIntentId = intent.Id;
+
+            _salaryRepo.UpdatePayment(payment); // Save payment
+
+            batch = _salaryRepo.GetBatchById(batchId);
             return MapPaymentToDto(payment);
         }
 
         public SalaryPaymentDto? ConfirmStripeSalaryPayment(string paymentIntentId, int approverId)
         {
-            // Find the payment by Stripe intent
-            var payment = _salaryRepo.GetBatchesByClient(0) // replace with actual method to get payment by Stripe ID
-                .SelectMany(b => b.Items)
-                .FirstOrDefault(p => p.StripePaymentIntentId == paymentIntentId);
-
+            var payment = _salaryRepo.GetPaymentByStripeId(paymentIntentId);
             if (payment == null) return null;
 
-            payment.Status = PaymentStatus.Processed;
+            var intent = _stripe.GetPaymentIntent(paymentIntentId);
+
+            if (intent.Status == "succeeded")
+            {
+                _fundTransfer.TransferFunds(
+                    payment.SalaryBatch.ClientId, AccountHolderType.Client,
+                    payment.EmployeeId, AccountHolderType.Employee, payment.Amount
+                );
+
+                payment.Status = PaymentStatus.Processed;
+                payment.TxnRef = $"TXN-{Guid.NewGuid()}";
+
+                _txnService.RecordTransaction(new TransactionDto
+                {
+                    PaymentId = null,
+                    SalaryPaymentId = payment.Id,
+                    Amount = payment.Amount,
+                    DebitAccountMasked = MaskAccount(payment.SalaryBatch.Client.Beneficiaries.FirstOrDefault()?.AccountNumber ?? ""),
+                    CreditAccountMasked = MaskAccount(payment.Employee.AccountNumber),
+                    TransactionDate = DateTimeOffset.UtcNow,
+                    Status = "SUCCESS",
+                    ExternalTxnRef = payment.TxnRef
+                });
+            }
+            else
+            {
+                payment.Status = PaymentStatus.Failed;
+                payment.FailureReason = $"Stripe status: {intent.Status}";
+            }
+
             _salaryRepo.UpdatePayment(payment);
+
+            var batch = _salaryRepo.GetBatchById(payment.SalaryBatchId);
+            if (batch != null)
+            {
+                batch.Status = batch.Items.All(p => p.Status == PaymentStatus.Processed) ? BatchStatus.Processed :
+                               batch.Items.All(p => p.Status == PaymentStatus.Failed) ? BatchStatus.Failed :
+                               BatchStatus.PartiallyProcessed;
+                _salaryRepo.UpdateBatch(batch);
+            }
+
             return MapPaymentToDto(payment);
         }
 
-        // ---------------- Helpers ----------------
+        #endregion
 
-        private SalaryBatchDto MapBatchToDto(SalaryBatch batch)
+        #region Queries / Delete
+
+        public SalaryBatchDto? GetBatchById(int id) =>
+            _salaryRepo.GetBatchById(id) is SalaryBatch b ? MapBatchToDto(b) : null;
+
+        public IEnumerable<SalaryBatchDto> GetBatchesByClient(int clientId) =>
+            _salaryRepo.GetBatchesByClient(clientId).Select(MapBatchToDto);
+
+        public SalaryPaymentDto? GetPaymentById(int id) =>
+            _salaryRepo.GetPaymentById(id) is SalaryPayment p ? MapPaymentToDto(p) : null;
+
+        public bool DeleteBatch(int id)
         {
-            return new SalaryBatchDto
-            {
-                Id = batch.Id,
-                ClientId = batch.ClientId,
-                BatchCode = batch.BatchCode,
-                TotalAmount = batch.TotalAmount,
-                Status = ConvertBatchStatusToPaymentStatus(batch.Status),
-                Items = batch.Items.Select(MapPaymentToDto).ToList(),
-                Method = batch.Items.FirstOrDefault()?.Method ?? PaymentMethod.Internal
-            };
+            var batch = _salaryRepo.GetBatchById(id);
+            if (batch == null) return false;
+            _salaryRepo.DeleteBatch(batch);
+            return true;
         }
 
-        private SalaryPaymentDto MapPaymentToDto(SalaryPayment payment)
+        #endregion
+
+        #region Helpers
+
+        private SalaryBatchDto MapBatchToDto(SalaryBatch b) => new SalaryBatchDto
         {
-            return new SalaryPaymentDto
-            {
-                Id = payment.Id,
-                EmployeeId = payment.EmployeeId,
-                EmployeeName = payment.Employee?.FullName ?? "",
-                Amount = payment.Amount,
-                Status = payment.Status,
-                TxnRef = payment.TxnRef,
-                FailureReason = payment.FailureReason,
-                SalaryBatchId = null, // optional, if needed add reference
-                Method = payment.Method,
-                StripePaymentIntentId = payment.StripePaymentIntentId
-            };
+            Id = b.Id,
+            ClientId = b.ClientId,
+            BatchCode = b.BatchCode,
+            TotalAmount = b.TotalAmount,
+            Status = b.Status, // ✅ Now uses BatchStatus
+            Items = b.Items.Select(MapPaymentToDto).ToList(),
+            Method = b.Items.FirstOrDefault()?.Method ?? PaymentMethod.Internal
+        };
+
+        private SalaryPaymentDto MapPaymentToDto(SalaryPayment p) => new SalaryPaymentDto
+        {
+            Id = p.Id,
+            EmployeeId = p.EmployeeId,
+            EmployeeName = p.Employee?.FullName ?? "Unknown",
+            Amount = p.Amount,
+            Status = p.Status,
+            TxnRef = p.TxnRef,
+            FailureReason = p.FailureReason,
+            SalaryBatchId = p.SalaryBatchId,
+            Method = p.Method,
+            StripePaymentIntentId = p.StripePaymentIntentId
+        };
+
+        private string MaskAccount(string accountNumber)
+        {
+            if (string.IsNullOrEmpty(accountNumber) || accountNumber.Length <= 4) return "****";
+            return new string('*', accountNumber.Length - 4) + accountNumber[^4..];
         }
 
-        private PaymentStatus ConvertBatchStatusToPaymentStatus(BatchStatus status)
-        {
-            return status switch
-            {
-                BatchStatus.Created => PaymentStatus.Draft,
-                BatchStatus.Submitted => PaymentStatus.PendingApproval,
-                BatchStatus.Approved => PaymentStatus.Approved,
-                BatchStatus.Processed => PaymentStatus.Processed,
-                BatchStatus.Failed => PaymentStatus.Failed,
-                _ => PaymentStatus.Draft
-            };
-        }
+        #endregion
     }
 }

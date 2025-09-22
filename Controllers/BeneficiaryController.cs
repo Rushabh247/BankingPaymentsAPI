@@ -19,7 +19,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Create a new beneficiary
         [HttpPost]
-        // [Authorize(Roles = "Admin,BankUser")]
+        [Authorize(Roles = "SuperAdmin,ClientUser")]
         public async Task<IActionResult> Create([FromBody] BeneficiaryRequestDto dto, [FromQuery] int createdBy)
         {
             var createdBeneficiary = await _service.CreateBeneficiaryAsync(dto, createdBy);
@@ -28,7 +28,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Get beneficiary by ID
         [HttpGet("{id}")]
-        // [Authorize(Roles = "Admin,BankUser")]
+         [Authorize(Roles = "SuperAdmin,BankUser,ClientUser")]
         public async Task<IActionResult> GetById(int id)
         {
             var beneficiary = await _service.GetByIdAsync(id);
@@ -37,7 +37,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Get all beneficiaries for a client
         [HttpGet("by-client/{clientId}")]
-        // [Authorize(Roles = "Admin,BankUser")]
+        [Authorize(Roles = "SuperAdmin,ClientUser")]
         public async Task<IActionResult> GetByClient(int clientId)
         {
             var beneficiaries = await _service.GetByClientAsync(clientId);
@@ -46,7 +46,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Update beneficiary
         [HttpPut("{id}")]
-        // [Authorize(Roles = "Admin,BankUser")]
+         [Authorize(Roles = "SuperAdmin,ClientUser")]
         public async Task<IActionResult> Update(int id, [FromBody] BeneficiaryRequestDto dto)
         {
             var updatedBeneficiary = await _service.UpdateAsync(id, dto);
@@ -55,7 +55,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Soft delete beneficiary
         [HttpDelete("{id}")]
-        // [Authorize(Roles = "Admin")]
+         [Authorize(Roles = "SuperAdmin,ClientUser")]
         public async Task<IActionResult> Delete(int id)
         {
             var result = await _service.DeleteAsync(id);

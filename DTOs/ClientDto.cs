@@ -12,6 +12,7 @@
         public string OnboardingStatus { get; set; }
         public bool IsVerified { get; set; }
         public string? AccountNumber { get; set; }
+        public string AccountNumberMasked { get; set; }
 
         public decimal Balance { get; set; }
     }

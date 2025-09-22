@@ -1,5 +1,6 @@
 ﻿using BankingPaymentsAPI.DTOs;
 using BankingPaymentsAPI.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 
@@ -17,6 +18,7 @@ namespace BankingPaymentsAPI.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "SuperAdmin,BankUser,ClientUser")]
         public async Task<IActionResult> RequestReport([FromBody] ReportRequestCreateDto dto, [FromQuery] int requestedBy)
         {
             var report = await _service.RequestReportAsync(dto, requestedBy);
@@ -24,6 +26,7 @@ namespace BankingPaymentsAPI.Controllers
         }
 
         [HttpGet("{id}")]
+        [Authorize(Roles = "SuperAdmin,BankUser,ClientUser")]
         public async Task<IActionResult> GetById(int id)
         {
             var report = await _service.GetByIdAsync(id);
@@ -31,6 +34,7 @@ namespace BankingPaymentsAPI.Controllers
         }
 
         [HttpGet]
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> GetAll([FromQuery] int? clientId, [FromQuery] string fromDate, [FromQuery] string toDate)
         {
             var reports = await _service.GetReportsAsync(clientId, fromDate, toDate);
@@ -38,6 +42,7 @@ namespace BankingPaymentsAPI.Controllers
         }
 
         [HttpGet("type/{reportType}")]
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> GetByType(string reportType, [FromQuery] int? clientId)
         {
             var data = await _service.GetReportDataByTypeAsync(reportType, clientId);
@@ -45,6 +50,7 @@ namespace BankingPaymentsAPI.Controllers
         }
 
         [HttpPut("generate/{id}")]
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> GenerateReport(int id)
         {
             await _service.GenerateAndCompleteReportAsync(id);
@@ -52,6 +58,7 @@ namespace BankingPaymentsAPI.Controllers
         }
 
         [HttpPut("fail/{id}")]
+        [Authorize(Roles = "SuperAdmin,BankUser")]
         public async Task<IActionResult> MarkFailed(int id, [FromQuery] string reason)
         {
             await _service.MarkFailedAsync(id, reason);

@@ -18,7 +18,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Create new batch
         [HttpPost]
-       // [Authorize(Roles = "Admin,BankUser")]
+        [Authorize(Roles = "Admin,ClientUser")]
         public IActionResult Create([FromBody] SalaryBatchRequestDto dto)
         {
             var createdBy = GetCurrentUserId();
@@ -29,7 +29,7 @@ namespace BankingPaymentsAPI.Controllers
 
         // Get batch by Id
         [HttpGet("{id}")]
-       // [Authorize(Roles = "Admin,BankUser")]
+        [Authorize(Roles = "Admin,BankUser,ClientUser")]
         public IActionResult GetById(int id)
         {
             var batch = _service.GetBatchById(id);
@@ -38,31 +38,69 @@ namespace BankingPaymentsAPI.Controllers
 
         // Get all batches for a client
         [HttpGet("by-client/{clientId}")]
-       // [Authorize(Roles = "Admin,BankUser")]
+        [Authorize(Roles = "Admin,BankUser,ClientUser")]
         public IActionResult GetByClient(int clientId)
         {
             var batches = _service.GetBatchesByClient(clientId);
             return Ok(batches);
         }
 
-        // Submit batch
+        // Submit batch for processing
         [HttpPut("submit/{id}")]
-       // [Authorize(Roles = "Admin,BankUser")]
+        [Authorize(Roles = "Admin,BankUser")]
         public IActionResult Submit(int id)
         {
             var submittedBy = GetCurrentUserId();
-            var batch = _service.SubmitBatch(id, submittedBy);
+            var batch = _service.ProcessBatch(id, submittedBy, "Submitted for processing");
 
             return batch == null ? NotFound($"SalaryBatch with ID {id} not found.") : Ok(batch);
         }
 
         // Delete batch
         [HttpDelete("{id}")]
-       // [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,BankUser")]
         public IActionResult Delete(int id)
         {
             var result = _service.DeleteBatch(id);
             return result ? NoContent() : NotFound($"SalaryBatch with ID {id} not found.");
+        }
+
+        // Confirm Stripe payment (called from webhook or after approval)
+        [HttpPut("confirm-stripe/{paymentIntentId}")]
+        [Authorize(Roles = "Admin,BankUser")]
+        public IActionResult ConfirmStripe(string paymentIntentId)
+        {
+            var approverId = GetCurrentUserId();
+            var payment = _service.ConfirmStripeSalaryPayment(paymentIntentId, approverId);
+
+            return payment == null ? NotFound($"No payment found for Stripe Intent ID {paymentIntentId}.") : Ok(payment);
+        }
+
+        // Get payments for a batch
+        [HttpGet("{batchId}/payments")]
+        [Authorize(Roles = "Admin,BankUser,ClientUser")]
+        public IActionResult GetPaymentsByBatch(int batchId)
+        {
+            var payments = _service.GetBatchById(batchId)?.Items;
+            return payments == null ? NotFound($"No payments found for batch {batchId}.") : Ok(payments);
+        }
+
+        // Retry failed payments in a batch
+        [HttpPut("{batchId}/retry-failed")]
+        [Authorize(Roles = "Admin,BankUser,ClientUser")]
+        public IActionResult RetryFailedPayments(int batchId)
+        {
+            var batch = _service.GetBatchesByClient(batchId)
+                .FirstOrDefault(b => b.Id == batchId);
+
+            if (batch == null) return NotFound($"Batch {batchId} not found.");
+
+            var retried = batch.Items
+                .Where(p => p.Status == Enums.PaymentStatus.Failed)
+                .Select(p => _service.RetryFailedPayment(p.Id, GetCurrentUserId()))
+                .ToList();
+
+            return Ok(retried);
         }
 
         // helper: extract current userId from claims

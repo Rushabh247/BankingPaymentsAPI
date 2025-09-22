@@ -27,7 +27,7 @@ namespace BankingPaymentsAPI.Controllers
 
       
         [HttpGet("{id}")]
-        [Authorize(Roles = "Admin,BankUser")]
+        [Authorize(Roles = "Admin")]
         public IActionResult GetById(int id)
         {
             var user = _service.GetById(id);
@@ -35,7 +35,7 @@ namespace BankingPaymentsAPI.Controllers
         }
 
         [HttpGet("by-username-or-email/{usernameOrEmail}")]
-        [Authorize(Roles = "Admin,BankUser")]
+        [Authorize(Roles = "Admin")]
         public IActionResult GetByUsernameOrEmail(string usernameOrEmail)
         {
             var user = _service.GetByUsernameOrEmail(usernameOrEmail);

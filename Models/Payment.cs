@@ -8,10 +8,11 @@ namespace BankingPaymentsAPI.Models
         public int Id { get; set; }
 
         public int ClientId { get; set; }
+        [JsonIgnore] 
         public Client Client { get; set; }
 
         public int? BeneficiaryId { get; set; }
-        [JsonIgnore]
+        [JsonIgnore] 
         public Beneficiary Beneficiary { get; set; }
 
         public decimal Amount { get; set; }
@@ -24,10 +25,10 @@ namespace BankingPaymentsAPI.Models
         public string? ApprovalRemarks { get; set; }
         public string? BankTransactionRef { get; set; }
 
+        [JsonIgnore] 
         public ICollection<Transaction> Transactions { get; set; }
 
-        // 🔹 NEW Hybrid fields
-        public PaymentMethod Method { get; set; } = PaymentMethod.Internal; // Internal (default) or Stripe
-        public string? StripePaymentIntentId { get; set; } // Used only when Method == Stripe
+        public PaymentMethod Method { get; set; } = PaymentMethod.Internal;
+        public string? StripePaymentIntentId { get; set; }
     }
 }

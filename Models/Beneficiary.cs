@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace BankingPaymentsAPI.Models
 {
@@ -6,6 +7,7 @@ namespace BankingPaymentsAPI.Models
     {
         public int Id { get; set; }
         public int ClientId { get; set; }
+        [JsonIgnore] 
         public Client Client { get; set; }
 
         public string Name { get; set; }
@@ -13,7 +15,6 @@ namespace BankingPaymentsAPI.Models
         public string IFSC { get; set; }
         public string Email { get; set; }
 
-       
         public decimal Balance { get; set; } = 0m;
 
         [Timestamp]

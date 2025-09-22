@@ -23,6 +23,8 @@ namespace BankingPaymentsAPI.Repository
             return _context.SalaryBatches
                 .Include(b => b.Items)
                 .ThenInclude(i => i.Employee)
+                .Include(b => b.Client)
+                .ThenInclude(c => c.Beneficiaries)
                 .FirstOrDefault(b => b.Id == id);
         }
 
@@ -51,14 +53,34 @@ namespace BankingPaymentsAPI.Repository
         {
             return _context.SalaryPayments
                 .Include(p => p.Employee)
-                .Include(p => p.SalaryBatch)   
+                .Include(p => p.SalaryBatch)
+                    .ThenInclude(b => b.Client)
+                    .ThenInclude(c => c.Beneficiaries)
                 .FirstOrDefault(p => p.Id == id);
+        }
+
+        public SalaryPayment? GetPaymentByStripeId(string stripeIntentId)
+        {
+            return _context.SalaryPayments
+                .Include(p => p.Employee)
+                .Include(p => p.SalaryBatch)
+                    .ThenInclude(b => b.Client)
+                    .ThenInclude(c => c.Beneficiaries)
+                .FirstOrDefault(p => p.StripePaymentIntentId == stripeIntentId);
         }
 
         public void UpdatePayment(SalaryPayment payment)
         {
             _context.SalaryPayments.Update(payment);
             _context.SaveChanges();
+        }
+
+        // NEW: add this
+        public SalaryPayment AddPayment(SalaryPayment payment)
+        {
+            _context.SalaryPayments.Add(payment);
+            _context.SaveChanges();
+            return payment;
         }
     }
 }

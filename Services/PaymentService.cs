@@ -7,6 +7,9 @@ using BankingPaymentsAPI.Services.PaymentProcessing;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using System.Text.Json;
+using System.Collections.Generic;
+using System.Linq;
+using System;
 
 namespace BankingPaymentsAPI.Services
 {
@@ -38,6 +41,7 @@ namespace BankingPaymentsAPI.Services
             _stripe = stripe;
         }
 
+        // Internal Payment
         public PaymentDto CreatePayment(PaymentRequestDto request, int createdByUserId)
         {
             var payment = new Payment
@@ -52,13 +56,14 @@ namespace BankingPaymentsAPI.Services
             };
 
             payment = _paymentRepo.Add(payment);
-            SendPaymentEmail(payment, "Payment Created", $"Payment of {payment.Amount} {payment.Currency} created and pending approval.");
 
+            SendPaymentEmail(payment, "Payment Created", $"Payment of {payment.Amount} {payment.Currency} created and pending approval.");
             LogAudit("CREATE", null, payment);
 
             return MapToDto(payment);
         }
 
+        // Stripe Payment
         public PaymentDto CreateStripePayment(PaymentRequestDto request, int createdByUserId)
         {
             var payment = new Payment
@@ -72,13 +77,14 @@ namespace BankingPaymentsAPI.Services
                 Method = PaymentMethod.Stripe
             };
 
-            // Create Stripe PaymentIntent
+            payment = _paymentRepo.Add(payment);
+
             var intent = _stripe.CreatePaymentIntent(payment.Amount, payment.Currency, $"payment_{payment.Id}");
             payment.StripePaymentIntentId = intent.Id;
 
-            payment = _paymentRepo.Add(payment);
+            _paymentRepo.Update(payment);
 
-            SendPaymentEmail(payment, "Stripe Payment Initiated", $"Stripe payment of {payment.Amount} {payment.Currency} initiated. Use Stripe to complete payment.");
+            SendPaymentEmail(payment, "Stripe Payment Initiated", $"Stripe payment of {payment.Amount} {payment.Currency} initiated.");
             LogAudit("CREATE_STRIPE_PAYMENT", null, payment);
 
             return MapToDto(payment);
@@ -91,7 +97,6 @@ namespace BankingPaymentsAPI.Services
 
             var oldValue = JsonSerializer.Serialize(payment);
 
-            // Check Stripe payment status
             var intent = _stripe.GetPaymentIntent(paymentIntentId);
             payment.Status = intent.Status == "succeeded" ? PaymentStatus.Approved : PaymentStatus.Failed;
             payment.ApprovedBy = approverId;
@@ -100,7 +105,8 @@ namespace BankingPaymentsAPI.Services
 
             if (payment.Status == PaymentStatus.Approved)
             {
-                _fundTransferService.TransferFunds(payment.ClientId, AccountHolderType.Client, payment.BeneficiaryId ?? 0, AccountHolderType.Beneficiary, payment.Amount);
+                _fundTransferService.TransferFunds(payment.ClientId, AccountHolderType.Client,
+                    payment.BeneficiaryId ?? 0, AccountHolderType.Beneficiary, payment.Amount);
             }
 
             _paymentRepo.Update(payment);
@@ -108,17 +114,6 @@ namespace BankingPaymentsAPI.Services
             LogAudit("CONFIRM_STRIPE_PAYMENT", oldValue, payment);
 
             return MapToDto(payment);
-        }
-
-        public PaymentDto? GetPaymentById(int id)
-        {
-            var payment = _paymentRepo.GetById(id);
-            return payment == null ? null : MapToDto(payment);
-        }
-
-        public IEnumerable<PaymentDto> GetAllPayments()
-        {
-            return _paymentRepo.GetAll().Select(MapToDto);
         }
 
         public PaymentDto? ApprovePayment(int id, int approverId, string remarks)
@@ -133,7 +128,8 @@ namespace BankingPaymentsAPI.Services
             payment.ApprovedAt = DateTimeOffset.UtcNow;
             payment.ApprovalRemarks = remarks;
 
-            _fundTransferService.TransferFunds(payment.ClientId, AccountHolderType.Client, payment.BeneficiaryId ?? 0, AccountHolderType.Beneficiary, payment.Amount);
+            _fundTransferService.TransferFunds(payment.ClientId, AccountHolderType.Client,
+                payment.BeneficiaryId ?? 0, AccountHolderType.Beneficiary, payment.Amount);
 
             _paymentRepo.Update(payment);
             SendPaymentEmail(payment, "Payment Approved", $"Payment approved. Remarks: {remarks}");
@@ -142,6 +138,12 @@ namespace BankingPaymentsAPI.Services
             return MapToDto(payment);
         }
 
+        public PaymentDto? GetPaymentById(int id) =>
+            _paymentRepo.GetById(id) is Payment p ? MapToDto(p) : null;
+
+        public IEnumerable<PaymentDto> GetAllPayments() =>
+            _paymentRepo.GetAll().Select(MapToDto);
+
         public bool DeletePayment(int id)
         {
             var payment = _paymentRepo.GetById(id);
@@ -149,30 +151,26 @@ namespace BankingPaymentsAPI.Services
 
             var oldValue = JsonSerializer.Serialize(payment);
             _paymentRepo.Delete(payment);
-            SendPaymentEmail(payment, "Payment Deleted", $"Payment deleted.");
+            SendPaymentEmail(payment, "Payment Deleted", "Payment deleted.");
             LogAudit("DELETE", oldValue, null);
-
             return true;
         }
 
         #region Helpers
-        private PaymentDto MapToDto(Payment p)
+        private PaymentDto MapToDto(Payment p) => new PaymentDto
         {
-            return new PaymentDto
-            {
-                Id = p.Id,
-                ClientId = p.ClientId,
-                ClientName = p.Client?.Name ?? "Unknown",
-                BeneficiaryId = p.BeneficiaryId,
-                BeneficiaryName = p.Beneficiary?.Name ?? "Unknown",
-                Amount = p.Amount,
-                Currency = p.Currency,
-                Status = p.Status,
-                ApprovedBy = p.ApprovedBy,
-                ApprovedAt = p.ApprovedAt,
-                ApprovalRemarks = p.ApprovalRemarks
-            };
-        }
+            Id = p.Id,
+            ClientId = p.ClientId,
+            ClientName = p.Client?.Name ?? "Unknown",
+            BeneficiaryId = p.BeneficiaryId,
+            BeneficiaryName = p.Beneficiary?.Name ?? "Unknown",
+            Amount = p.Amount,
+            Currency = p.Currency,
+            Status = p.Status,
+            ApprovedBy = p.ApprovedBy,
+            ApprovedAt = p.ApprovedAt,
+            ApprovalRemarks = p.ApprovalRemarks
+        };
 
         private void SendPaymentEmail(Payment p, string subject, string body)
         {
@@ -180,22 +178,25 @@ namespace BankingPaymentsAPI.Services
             _email.SendEmailAsync(p.Client?.ContactEmail ?? fromEmail, subject, body);
         }
 
-        private void LogAudit(string action, string? oldValueJson, Payment newValue)
+        private void LogAudit(string action, string? oldValueJson, Payment? newValue)
         {
             _audit.Log(new CreateAuditLogDto
             {
                 UserId = GetCurrentUserId(),
                 Action = action,
                 EntityName = nameof(Payment),
-                EntityId = newValue.Id,
+                EntityId = newValue?.Id ?? 0,
                 OldValueJson = oldValueJson,
-                NewValueJson = JsonSerializer.Serialize(newValue),
+                NewValueJson = newValue == null ? null : JsonSerializer.Serialize(newValue),
                 IpAddress = GetClientIp()
             });
         }
 
-        private int GetCurrentUserId() => int.TryParse(_httpContext.HttpContext?.User?.FindFirst("userId")?.Value, out var id) ? id : 0;
-        private string GetClientIp() => _httpContext.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
+        private int GetCurrentUserId() =>
+            int.TryParse(_httpContext.HttpContext?.User?.FindFirst("userId")?.Value, out var id) ? id : 0;
+
+        private string GetClientIp() =>
+            _httpContext.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
         #endregion
     }
 }

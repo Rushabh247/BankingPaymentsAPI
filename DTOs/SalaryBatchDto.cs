@@ -9,12 +9,11 @@ namespace BankingPaymentsAPI.DTOs
         public string BatchCode { get; set; }
         public decimal TotalAmount { get; set; }
 
-      
-        public PaymentStatus Status { get; set; }
+        
+        public BatchStatus Status { get; set; }
 
         public List<SalaryPaymentDto> Items { get; set; } = new();
 
-       
         public PaymentMethod Method { get; set; }
     }
 }
